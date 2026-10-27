@@ -48,7 +48,6 @@ matrix = false
 command = ""
 artifacts = ""
 manifest = "crates/otf-pdf/Cargo.toml"
-changelog = "crates/otf-pdf/CHANGELOG.md"
 
 [[package]]
 name = "otf-pdf-content"
@@ -58,7 +57,6 @@ matrix = false
 command = ""
 artifacts = ""
 manifest = "crates/otf-pdf-content/Cargo.toml"
-changelog = "crates/otf-pdf-content/CHANGELOG.md"
 
 [[package]]
 name = "otf-pdf-doc"
@@ -68,7 +66,6 @@ matrix = false
 command = ""
 artifacts = ""
 manifest = "crates/otf-pdf-doc/Cargo.toml"
-changelog = "crates/otf-pdf-doc/CHANGELOG.md"
 
 [[package]]
 name = "otf-pdf-font"
@@ -78,7 +75,6 @@ matrix = false
 command = ""
 artifacts = ""
 manifest = "crates/otf-pdf-font/Cargo.toml"
-changelog = "crates/otf-pdf-font/CHANGELOG.md"
 
 [[package]]
 name = "otf-pdf-syntax"
@@ -88,7 +84,6 @@ matrix = false
 command = ""
 artifacts = ""
 manifest = "crates/otf-pdf-syntax/Cargo.toml"
-changelog = "crates/otf-pdf-syntax/CHANGELOG.md"
 
 [[package]]
 name = "otf-pdf-text"
@@ -98,4 +93,3 @@ matrix = false
 command = ""
 artifacts = ""
 manifest = "crates/otf-pdf-text/Cargo.toml"
-changelog = "crates/otf-pdf-text/CHANGELOG.md"
