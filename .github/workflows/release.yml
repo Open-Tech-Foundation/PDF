@@ -1,4 +1,4 @@
-# Generated from release.toml by `release` · sha256:e32c2f04242273fe1342036baef6cbf887e299121a1cdb4b1fe6f7bedb952083
+# Generated from release.toml by `release` · sha256:265035a225fe9fe638a9d04f8297fd7f3e9be6f3c9589580b35ba42f22654256
 name: Release
 
 on:
@@ -24,8 +24,8 @@ jobs:
       - name: Install release
         shell: bash
         env:
-          OTF_RELEASE_VERSION: v0.41.0
-        run: curl -fsSL https://raw.githubusercontent.com/Open-Tech-Foundation/release/v0.41.0/install.sh | bash
+          OTF_RELEASE_VERSION: v0.42.0
+        run: curl -fsSL https://raw.githubusercontent.com/Open-Tech-Foundation/release/v0.42.0/install.sh | bash
       - name: Expose release command
         shell: bash
         run: |
@@ -50,8 +50,8 @@ jobs:
       - name: Install release
         shell: bash
         env:
-          OTF_RELEASE_VERSION: v0.41.0
-        run: curl -fsSL https://raw.githubusercontent.com/Open-Tech-Foundation/release/v0.41.0/install.sh | bash
+          OTF_RELEASE_VERSION: v0.42.0
+        run: curl -fsSL https://raw.githubusercontent.com/Open-Tech-Foundation/release/v0.42.0/install.sh | bash
       - name: Expose release command
         shell: bash
         run: |

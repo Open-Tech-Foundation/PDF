@@ -32,7 +32,7 @@ std::fs::write("out.pdf", doc.save(&SaveOptions::default())?)?;
 
 > [!NOTE]
 > **Pre-1.0.** The API can change between minor versions; see the
-> [changelog](https://github.com/Open-Tech-Foundation/PDF/blob/main/crates/otf-pdf/CHANGELOG.md).
+> [changelog](https://github.com/Open-Tech-Foundation/PDF/blob/main/CHANGELOG.md).
 
 ## What it does
 

@@ -1,5 +1,5 @@
 adapters = ["crates.io"]
-tag_format = "{name}@{version}"
+tag_format = "v{version}"
 provider = "github"
 default_branch = "main"
 changelog_strategy = "curated"
