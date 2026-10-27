@@ -134,3 +134,6 @@ Supersedes D10 and the `runtime:pdf` deliverables in PLAN §5, §6 and §8. This
 
 ## D28: Font data tables
 The standard 14 metrics, Adobe Glyph List, predefined encodings and font name aliases are generated from pdf.js (Apache-2.0) by `scripts/generate-font-tables.py`. The CID → Unicode tables for the four Adobe CJK collections are inverted from Adobe's cmap-resources (BSD-3-Clause) by `scripts/generate-cid-tables.py`, preferring unified ideographs over radical and compatibility forms. Both are generated, never hand-edited (task `fonts:tables` checks them, with network), attributed in NOTICE, and add about 2.2 MB of source, roughly 0.8 MB compiled. A compressed binary encoding would shrink that and can come later if binary size matters.
+
+## D29: es-runtime ships `runtime:pdf`
+Amends D22. This repository still ships only the library and adds no host bindings; es-runtime builds `runtime:pdf` on the published facade itself (es-runtime DECISIONS D190), as it builds `runtime:images` on otf-pixels. D22's "no `runtime:pdf` module, here or in es-runtime" is withdrawn for es-runtime: the bindings live in that repository, and the API they expose is decided there. What this repository owes them is unchanged: the embedding contract in docs/EMBEDDING.md.

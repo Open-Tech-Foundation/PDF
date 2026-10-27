@@ -9,6 +9,8 @@ versioning: [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Decision D29: es-runtime builds `runtime:pdf` on the published facade
+  in its own repository, amending D22.
 - **otf-pdf-syntax:** Object model (`Object`, `Dict`, `Name`, `PdfString`, `Stream`, `ObjId`)
   with names and strings kept as bytes, and a deterministic serializer.
 - **otf-pdf-syntax:** `Source` and `Sink` traits for input and output; no I/O of its own.

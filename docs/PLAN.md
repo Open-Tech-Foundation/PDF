@@ -234,7 +234,7 @@ The signer is a trait (`sign(digest) -> signature`) so keys can live in the runt
 
 ## 6. es-runtime integration (`runtime:pdf`)
 
-> Superseded by DECISIONS.md D22: this repository ships an embeddable library only; host bindings are not built here. The notes below describe how a host might embed it.
+> Superseded by DECISIONS.md D22 and D29: this repository ships an embeddable library only. es-runtime builds `runtime:pdf` on it in its own repository (its DECISIONS D190), and its API is decided there. The draft below is kept as history.
 
 - es-runtime depends on the `otf-pdf` facade crate.
 - All heavy operations run on the CPU offload tier, never on the isolate thread.
