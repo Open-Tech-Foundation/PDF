@@ -95,10 +95,15 @@ fn external_corpus_opens() {
     use otf_pdf_syntax::{File, OpenOptions};
     use std::sync::Arc;
     let passwords = passwords();
-    assert!(
-        passwords.is_empty() || passwords.len() >= 5,
-        "pdf.js manifest passwords not found"
-    );
+    // When pdf.js's files are fetched, its manifest's passwords must load
+    // (corpus/passwords.tsv alone is always present).
+    if corpus().join("external/pdfjs").exists() {
+        let from_manifest = passwords
+            .keys()
+            .filter(|k| k.starts_with("external/pdfjs/"))
+            .count();
+        assert!(from_manifest >= 5, "pdf.js manifest passwords not found");
+    }
     against_baseline("open", |key, bytes| {
         let options = OpenOptions {
             password: passwords
