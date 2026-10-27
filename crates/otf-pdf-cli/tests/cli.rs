@@ -411,3 +411,21 @@ fn sanitize_command() {
         .unwrap();
     assert_eq!(output.status.code(), Some(1));
 }
+
+#[test]
+fn text_command() {
+    let output = bin()
+        .arg("text")
+        .arg(malformed("minimal-valid.pdf"))
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(stdout(&output), "Hello\n\x0c");
+    let hindi = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/text/hindi-chromium.pdf");
+    let output = bin().arg("text").arg(&hindi).arg("1").output().unwrap();
+    assert!(
+        stdout(&output).starts_with("भारत एक विशाल देश है।"),
+        "{}",
+        stdout(&output)
+    );
+}

@@ -1,7 +1,7 @@
 [package]
 name = "otf-pdf"
 description = "A from-scratch toolkit to parse, edit, sign, verify, generate, validate and render PDFs."
-readme = "README.md"
+readme = "../../README.md"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -14,6 +14,9 @@ keywords = ["pdf"]
 [dependencies]
 otf-pdf-syntax.workspace = true
 otf-pdf-doc.workspace = true
+otf-pdf-content.workspace = true
+otf-pdf-font.workspace = true
+otf-pdf-text.workspace = true
 
 [lints]
 workspace = true

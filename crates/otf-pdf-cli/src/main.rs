@@ -13,7 +13,8 @@ use std::sync::Arc;
 
 use otf_pdf::{
     Authentication, Document, Encryption, Entropy, ObjId, Object, OpenOptions, Permissions, Rect,
-    SanitizeOptions, SaveMode, SaveOptions, Strictness, Version, XrefEntry, to_bytes,
+    SanitizeOptions, SaveMode, SaveOptions, Strictness, TextExtractor, Version, XrefEntry,
+    to_bytes,
 };
 
 /// Every input was processed.
@@ -31,6 +32,7 @@ Commands:
   info <file>                 Print version, page count, encryption, metadata
                               and repairs made while reading
   pages <file>                List pages with their boxes and rotation
+  text <file> [pages]         Print the text, pages separated by form feeds
   objects <file>              List the cross-reference entries
   dump <file> <num> [gen]     Print an object in PDF syntax
   dump <file> trailer         Print the trailer dictionary
@@ -152,6 +154,7 @@ fn run(args: &[OsString], out: &mut dyn Write, err: &mut dyn Write) -> u8 {
         "info" => with_document(&options, err, &command, |doc| info(doc, out)),
         "pages" => with_document(&options, err, &command, |doc| pages(doc, out)),
         "objects" => with_document(&options, err, &command, |doc| objects(doc, out)),
+        "text" => with_document(&options, err, &command, |doc| text(doc, &options, out)),
         "save" | "sanitize" | "extract" | "delete" | "rotate" => {
             let want = match &*command {
                 "save" | "sanitize" => 2,
@@ -503,6 +506,20 @@ fn pages(doc: &Document, out: &mut dyn Write) -> Result<u8, String> {
             line.push_str(&format!("  Rotate {}", page.rotate));
         }
         let _ = writeln!(out, "{line}");
+    }
+    Ok(EXIT_OK)
+}
+
+fn text(doc: &Document, options: &Options, out: &mut dyn Write) -> Result<u8, String> {
+    let extractor = TextExtractor::new(doc);
+    let count = doc.page_count().map_err(|e| e.to_string())?;
+    let pages = match options.positional.get(1) {
+        Some(spec) => parse_pages(&spec.to_string_lossy(), count)?,
+        None => (0..count).collect(),
+    };
+    for i in pages {
+        let text = extractor.page_text(i).map_err(|e| e.to_string())?;
+        let _ = write!(out, "{text}\x0c");
     }
     Ok(EXIT_OK)
 }

@@ -83,6 +83,14 @@ an error, for validators.
 - `NoXref`, `NoRoot`, `Syntax`: the file is not a readable PDF.
 - `Source`: the host's `Source` failed; its message is passed through.
 
+## Text extraction
+
+`TextExtractor::new(&doc)` caches loaded fonts across pages; create one per
+document and reuse it. Each `page(i)` runs that page's content (and its
+annotation appearances) through the interpreter, bounded by `Limits` like
+everything else. A server indexing documents should call `page(i)` per page
+so one bad page fails alone; `text()` already skips pages that error.
+
 ## Saving
 
 `Document::save_to(&mut sink, &options)` writes through the `Sink` trait

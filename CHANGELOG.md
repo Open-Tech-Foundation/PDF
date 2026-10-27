@@ -7,6 +7,26 @@ versioning: [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Phase 3 text extraction:
+  - `otf-pdf-content`: content-stream tokenizer (inline images included),
+    graphics and text state, Form XObjects (cycle- and depth-limited),
+    annotation appearances, marked content, clip tracking, and the `Device`
+    and `Font`/`FontLoader` traits.
+  - `otf-pdf-font`: simple fonts (Type1 with built-in encodings, TrueType,
+    Type3) and Type0/CID fonts; predefined, Differences and built-in
+    encodings; embedded and predefined CMaps; ToUnicode; glyph-name and
+    embedded-cmap fallbacks; standard 14 metrics; Adobe-Japan1, GB1, CNS1
+    and Korea1 CID → Unicode tables.
+  - `otf-pdf-text`: `TextExtractor` with `PageText`, `TextLine`, `Word` and
+    `TextChar` (positions in displayed page space), `/ActualText`, invisible
+    OCR text, clipped text dropped.
+  - CLI `text`; `content` and `text` fuzz targets; Indic and CJK fixtures
+    (`corpus/text`) and a labelled poppler reference subset
+    (`corpus/reference/text`) scored by character error rate; a `text`
+    corpus baseline.
+- Release setup: `release.toml` and release workflow, NOTICE, the root
+  README shipped as the `otf-pdf` crate page, `docs/API.md`, and a
+  README check for published crates.
 - `Document::sanitize` with `SanitizeOptions` and `SanitizeReport`: removes
   JavaScript, external actions, attachments, XFA, multimedia and optionally
   links and metadata (D26); CLI `sanitize`.

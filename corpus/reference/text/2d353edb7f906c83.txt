@@ -1,0 +1,224 @@
+The CWEB System of Structured Documentation
+(Version 3.64 — February 2002)
+Donald E. Knuth and Silvio Levy
+TEX is a trademark of the American Mathematical Society.
+Acrobat Reader is a trademark of Adobe Systems Incorporated.
+The printed form of this manual is copyright c 1994 by Addison-Wesley Publishing Company, Inc. All
+rights reserved.
+The electronic form is copyright c 1987, 1990, 1993, 2000 by Silvio Levy and Donald E. Knuth.
+Permission is granted to make and distribute verbatim copies of the electronic form of this document provided
+that the electronic copyright notice and this permission notice are preserved on all copies.
+Permission is granted to copy and distribute modified versions of the electronic form of this document under
+the conditions for verbatim copying, provided that the entire resulting derived work is distributed under the
+terms of a permission notice identical to this one.
+Individuals may make copies of the documentation from the electronic files for their own personal use.
+Internet page http://www−cs−faculty.stanford.edu/~knuth/cweb.html contains current info about CWEB
+and related topics.
+The CWEB System of Structured Documentation
+Donald E. Knuth and Silvio Levy
+This document describes a version of Don Knuth’s WEB system, adapted to C by Silvio Levy. Since its
+creation in 1987, CWEB has been revised and enhanced in various ways, by both Knuth and Levy. We now
+believe that its evolution is near an end; however, bug reports, suggestions and comments are still welcome,
+and should be sent to Levy (levy@math.berkeley.edu).
+Readers who are familiar with Knuth’s memo “The WEB System of Structured Documentation” will be able
+to skim this material rapidly, because CWEB and WEB share the same philosophy and (essentially) the same
+syntax. In some respects CWEB is a simplification of WEB: for example, CWEB does not need WEB’s features
+for macro definition and string handling, because C and its preprocessor already take care of macros and
+strings. Similarly, the WEB conventions of denoting octal and hexadecimal constants by @’77 and @"3f are
+replaced by C’s conventions 077 and 0x3f. All other features of WEB have been retained, and new features
+have been added.
+We thank all who contributed suggestions and criticism to the development of CWEB. We are especially
+grateful to Steve Avery, Nelson Beebe, Hans-Hermann Bode, Klaus Guntermann, Norman Ramsey, Joachim
+Schnitter, and Saroj Mahapatra, who contributed code, and to Cameron Smith, who made many suggestions
+improving the manual. Ramsey has made literate programming accessible to users of yet other languages by
+means of his SPIDER system [see Communications of the ACM 32 (1989), 1051–1055]. The book Literate
+Programming by Knuth (1992) contains a comprehensive bibliography of related early work. Bode, Schnitter,
+and Mahapatra adapted CWEB so that it works for C++ as well; therefore in the text below you can read C++
+for C if you so desire.
+Introduction
+The philosophy behind CWEB is that programmers who want to provide the best possible documentation for
+their programs need two things simultaneously: a language like TEX for formatting, and a language like C
+for programming. Neither type of language can provide the best documentation by itself. But when both
+are appropriately combined, we obtain a system that is much more useful than either language separately.
+The structure of a software program may be thought of as a “web” that is made up of many interconnected
+pieces. To document such a program, we want to explain each individual part of the web and how it relates
+to its neighbors. The typographic tools provided by TEX give us an opportunity to explain the local structure
+of each part by making that structure visible, and the programming tools provided by C make it possible for
+us to specify the algorithms formally and unambiguously. By combining the two, we can develop a style of
+programming that maximizes our ability to perceive the structure of a complex piece of software, and at the
+same time the documented programs can be mechanically translated into a working software system that
+matches the documentation.
+The CWEB system consists of two programs named CWEAVE and CTANGLE. When writing a CWEB program
+the user keeps the C code and the documentation in the same file, called the CWEB file and generally named
+something.w. The command ‘cweave something’ creates an output file something.tex, which can then be
+fed to TEX, yielding a “pretty printed” version of something.w that correctly handles typographic details
+like page layout and the use of indentation, italics, boldface, and mathematical symbols. The typeset output
+also includes extensive cross-index information that is gathered automatically. Similarly, if you run the
+command ‘ctangle something’ you will get a C file something.c, which can then be compiled to yield
+executable code.
+Besides providing a documentation tool, CWEB enhances the C language by providing the ability to permute
+pieces of the program text, so that a large system can be understood entirely in terms of small sections and
+their local interrelationships. The CTANGLE program is so named because it takes a given web and moves
+the sections from their web structure into the order required by C; the advantage of programming in CWEB
+is that the algorithms can be expressed in “untangled” form, with each section explained separately. The
+CWEAVE program is so named because it takes a given web and intertwines the TEX and C portions contained
+in each section, then it knits the whole fabric into a structured document. (Get it? Wow.) Perhaps there is
+some deep connection here with the fact that the German word for “weave” is “webe”, and the corresponding
+Latin imperative is “texe”!
+2 CWEB USER MANUAL (VERSION 3.64)
+A user of CWEB should be fairly familiar with the C programming language. A minimal amount of acquain-
+tance with TEX is also desirable, but in fact it can be acquired as one uses CWEB, since straight text can be
+typeset in TEX with virtually no knowledge of that language. To someone familiar with both C and TEX the
+amount of effort necessary to learn the commands of CWEB is small.
+Overview
+Two kinds of material go into CWEB files: TEX text and C text. A programmer writing in CWEB should be
+thinking both of the documentation and of the C program being created; i.e., the programmer should be
+instinctively aware of the different actions that CWEAVE and CTANGLE will perform on the CWEB file. TEX text
+is essentially copied without change by CWEAVE, and it is entirely deleted by CTANGLE; the TEX text is “pure
+documentation.” C text, on the other hand, is formatted by CWEAVE and it is shuffled around by CTANGLE,
+according to rules that will become clear later. For now the important point to keep in mind is that there are
+two kinds of text. Writing CWEB programs is something like writing TEX documents, but with an additional
+“C mode” that is added to TEX’s horizontal mode, vertical mode, and math mode.
+A CWEB file is built up from units called sections that are more or less self-contained. Each section has
+three parts:
+• A TEX part, containing explanatory material about what is going on in the section.
+• A middle part, containing macro definitions that serve as abbreviations for C constructions that would be
+less comprehensible if written out in full each time. They are turned by CTANGLE into preprocessor
+macro definitions.
+• A C part, containing a piece of the program that CTANGLE will produce. This C code should ideally be
+about a dozen lines long, so that it is easily comprehensible as a unit and so that its structure is
+readily perceived.
+The three parts of each section must appear in this order; i.e., the TEX commentary must come first, then
+the middle part, and finally the C code. Any of the parts may be empty.
+A section begins with either of the symbols ‘@ ’ or ‘@*’, where ‘ ’ denotes a blank space. A section ends
+at the beginning of the next section (i.e., at the next ‘@ ’ or ‘@*’), or at the end of the file, whichever comes
+first. The CWEB file may also contain material that is not part of any section at all, namely the text (if any)
+that occurs before the first section. Such text is said to be “in limbo”; it is ignored by CTANGLE and copied
+essentially verbatim by CWEAVE, so its function is to provide any additional formatting instructions that may
+be desired in the TEX output. Indeed, it is customary to begin a CWEB file with TEX code in limbo that loads
+special fonts, defines special macros, changes the page sizes, and/or produces a title page.
+Sections are numbered consecutively, starting with 1. These numbers appear at the beginning of each sec-
+tion of the TEX documentation output by CWEAVE, and they appear as bracketed comments at the beginning
+and end of the code generated by that section in the C program output by CTANGLE.
+Section Names
+Fortunately, you never mention these numbers yourself when you are writing in CWEB. You just say ‘@ ’
+or ‘@*’ at the beginning of each new section, and the numbers are supplied automatically by CWEAVE and
+CTANGLE. As far as you are concerned, a section has a name instead of a number; its name is specified by
+writing ‘@<’ followed by TEX text followed by ‘@>’. When CWEAVE outputs a section name, it replaces the ‘@<’
+and ‘@>’ by angle brackets and inserts the section number in small type. Thus, when you read the output of
+CWEAVE it is easy to locate any section that is referred to in another section.
+For expository purposes, a section name should be a good description of the contents of that section; i.e.,
+it should stand for the abstraction represented by the section. Then the section can be “plugged into” one or
+more other sections in such a way that unimportant details of its inner workings are suppressed. A section
+name therefore ought to be long enough to convey the necessary meaning.
+Unfortunately, it is laborious to type such long names over and over again, and it is also difficult to specify
+a long name twice in exactly the same way so that CWEAVE and CTANGLE will be able to match the names to
+the sections. To ameliorate this situation, CWEAVE and CTANGLE let you abbreviate a section name, so long
+as the full name appears somewhere in the CWEB file; you can type simply ‘@<α...@>’, where α is any string
+that is a prefix of exactly one section name appearing in the file. For example, ‘@<Clear the arrays@>’ can
+be abbreviated to ‘@<Clear...@>’ if no other section name begins with the five letters ‘Clear’. Elsewhere
+you might use the abbreviation ‘@<Clear t...@>’, and so on.
+CWEB USER MANUAL (VERSION 3.64) 3
+Section names must otherwise match character for character, except that consecutive characters of white
+space (spaces, tab marks, newlines, and/or form feeds) are treated as equivalent to a single space, and such
+spaces are deleted at the beginning and end of the name. Thus, ‘@< Clear the arrays @>’ will also match
+the name in the previous example. Spaces following the ellipsis in abbreviations are ignored as well, but not
+those before, so that ‘@<Clear t ...@>’ would not match ‘@<Clear the arrays@>’.
+What CTANGLE Does
+We have said that a section begins with ‘@ ’ or ‘@*’, but we didn’t say how it gets divided up into a TEX
+part, a middle part, and a C part. The middle part begins with the first appearance of ‘@d’ or ‘@f’ in the
+section, and the C part begins with the first appearance of ‘@c’ or ‘@<section name@>=’. In the latter case
+you are saying, in effect, that the section name stands for the C text that follows. Alternatively, if the C
+part begins with ‘@c’ instead of a section name, the current section is said to be unnamed.
+The construct ‘@<section name@>’ can appear any number of times in the C part of a section: Subsequent
+appearances indicate that a named section is being “used” rather than “defined.” In other words, the C code
+for the named section, presumably defined elsewhere, should be spliced in at this point in the C program.
+Indeed, the main idea of CTANGLE is to make a C program out of individual sections, named and unnamed.
+The exact way in which this is done is this: First all the macro definitions indicated by ‘@d’ are turned into
+C preprocessor macro definitions and copied at the beginning. Then the C parts of unnamed sections are
+copied down, in order; this constitutes the first-order approximation to the text of the program. (There
+should be at least one unnamed section, otherwise there will be no program.) Then all section names that
+appear in the first-order approximation are replaced by the C parts of the corresponding sections, and this
+substitution process continues until no section names remain. All comments are removed, because the C
+program is intended only for the eyes of the C compiler.
+If the same name has been given to more than one section, the C text for that name is obtained by putting
+together all of the C parts in the corresponding sections. This feature is useful, for example, in a section
+named ‘Global variables’, since one can then declare global variables in whatever sections those variables
+are introduced. When several sections have the same name, CWEAVE assigns the first section number as the
+number corresponding to that name, and it inserts a note at the bottom of that section telling the reader to
+‘See also sections so-and-so’; this footnote gives the numbers of all the other sections having the same name
+as the present one. The C text corresponding to a section is usually formatted by CWEAVE so that the output
+has an equivalence sign in place of the equals sign in the CWEB file; i.e., the output says ‘h section name i ≡ C
+text’. However, in the case of the second and subsequent appearances of a section with the same name, this
+‘≡’ sign is replaced by ‘+≡’, as an indication that the following C text is being appended to the C text of
+another section.
+As CTANGLE enters and leaves sections, it inserts preprocessor #line commands into the C output file.
+This means that when the compiler gives you error messages, or when you debug your program, the messages
+refer to line numbers in the CWEB file, and not in the C file. In most cases you can therefore forget about the
+C file altogether.
+What CWEAVE Does
+The general idea of CWEAVE is to make a .tex file from the CWEB file in the following way: The first line of
+the .tex file tells TEX to input a file with macros that define CWEB’s documentation conventions. The next
+lines of the file will be copied from whatever TEX text is in limbo before the first section. Then comes the
+output for each section in turn, possibly interspersed with end-of-page marks. Finally, CWEAVE will generate
+a cross-reference index that lists each section number in which each C identifier appears, and it will also
+generate an alphabetized list of the section names, as well as a table of contents that shows the page and
+section numbers for each “starred” section.
+What is a “starred” section, you ask? A section that begins with ‘@*’ instead of ‘@ ’ is slightly special
+in that it denotes a new major group of sections. The ‘@*’ should be followed by the title of this group,
+followed by a period. Such sections will always start on a new page in the TEX output, and the group title
+will appear as a running headline on all subsequent pages until the next starred section. The title will also
+appear in the table of contents, and in boldface type at the beginning of its section. Caution: Do not use
+TEX control sequences in such titles, unless you know that the cwebmac macros will do the right thing with
+them. The reason is that these titles are converted to uppercase when they appear as running heads, and
+they are converted to boldface when they appear at the beginning of their sections, and they are also written
+4 CWEB USER MANUAL (VERSION 3.64)
+out to a table-of-contents file used for temporary storage while TEX is working; whatever control sequences
+you use must be meaningful in all three of these modes.
+The TEX output produced by CWEAVE for each section consists of the following: First comes the section
+number (e.g., ‘\M123.’ at the beginning of section 123, except that ‘\N’ appears in place of ‘\M’ at the
+beginning of a starred section). Then comes the TEX part of the section, copied almost verbatim except
+as noted below. Then comes the middle part and the C part, formatted so that there will be a little extra
+space between them if both are nonempty. The middle and C parts are obtained by inserting a bunch of
+funny-looking TEX macros into the C program; these macros handle typographic details about fonts and
+proper math spacing, as well as line breaks and indentation.
+C Code in TEX Text and Vice Versa
+When you are typing TEX text, you will probably want to make frequent reference to variables and other
+quantities in your C code, and you will want those variables to have the same typographic treatment when
+they appear in your text as when they appear in your program. Therefore the CWEB language allows you
+to get the effect of C editing within TEX text, if you place ‘|’ marks before and after the C material. For
+example, suppose you want to say something like this:
+If pa is declared as ‘int ∗pa’, the assignment pa = &a[0] makes pa point to the zeroth element of a.
+The TEX text would look like this in your CWEB file:
+If |pa| is declared as ‘|int *pa|’, the
+assignment |pa=&a[0]| makes |pa| point to the zeroth element of |a|.
+And CWEAVE translates this into something you are glad you didn’t have to type:
+If \\{pa} is declared as ‘\&{int} ${}{*}\\{pa}$’,
+the assignment $\\{pa}\K{\AND}\|a[\T{0}]$
+makes \\{pa} point to the zeroth element of \|a.
+Incidentally, the cross-reference index that CWEAVE would make, in the presence of a comment like this, would
+include the current section number as one of the index entries for pa, even though pa might not appear in
+the C part of this section. Thus, the index covers references to identifiers in the explanatory comments as
+well as in the program itself; you will soon learn to appreciate this feature. However, the identifiers int
+and a would not be indexed, because CWEAVE does not make index entries for reserved words or single-letter
+identifiers. Such identifiers are felt to be so ubiquitous that it would be pointless to mention every place
+where they occur.
+Although a section begins with TEX text and ends with C text, we have noted that the dividing line isn’t
+sharp, since C text can be included in TEX text if it is enclosed in ‘|...|’. Conversely, TEX text appears
+frequently within C text, because everything in comments (i.e., between /* and */, or following //) is treated
+as TEX text. Likewise, the text of a section name consists of TEX text, but the construct @<section name@>
+as a whole is expected to be found in C text; thus, one typically goes back and forth between the C and TEX
+environments in a natural way, as in these examples:
+if (x==0) @<Empty the |buffer| array@>
+... using the algorithm in |@<Empty the |buffer| array@>|.
+The first of these excerpts would be found in the C part of a section, into which the code from the section
+named “Empty the buffer array” is being spliced. The second excerpt would be found in the TEX part of the
+section, and the named section is being “cited”, rather than defined or used. (Note the ‘|...|’ surrounding
+the section name in this case.)
+Macros
+The control code @d followed by
+identifier C text or by identifier (par 1, . . . , par n) C text
+(where there is no blank between the identifier and the parentheses in the second case) is transformed by
+CTANGLE into a preprocessor command, starting with #define, which is printed at the top of the C output
+file as explained earlier.
+

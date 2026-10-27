@@ -1,0 +1,19 @@
+[package]
+name = "otf-pdf-font"
+description = "Font layer for otf-pdf: simple and composite fonts, encodings, CMaps, ToUnicode and widths."
+readme = "README.md"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+otf-pdf-syntax.workspace = true
+otf-pdf-doc.workspace = true
+otf-pdf-content.workspace = true
+skrifa.workspace = true
+
+[lints]
+workspace = true

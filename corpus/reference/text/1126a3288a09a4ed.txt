@@ -1,0 +1,32 @@
+NUL DLED LE CRLF
+CRLF
+SOHS OH DC1D C1
+STXS TX DC2˘DC2 LFCR
+LFCR
+ETXE TX DC3ˇDC3
+EOTE OT DC4 DC4
+ENQE NQ NAK!NAK
+ACKA CK SYN"SYN
+BELB EL ETB#ETB
+BS
+BS CAN$CAN
+TAB some longer text TAB EM%EM
+LF
+LF
+SUB&SUB
+VTV T ESC'ESC
+FFF F FS(FS
+CR
+CR
+GS)GS
+SOS O RS0RS
+SIS I US1US
+SPACE SPACE linebreak
+linebreak
+paragraphbreak
+paragraphbreak
+linebreak-man
+linebreak-man
+paragraph-man
+paragraph-man
+

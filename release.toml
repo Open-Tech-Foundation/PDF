@@ -1,0 +1,83 @@
+adapters = ["crates.io"]
+tag_format = "{name}@{version}"
+provider = "github"
+default_branch = "main"
+changelog_strategy = "curated"
+changelog_scope = "root"
+github_release_notes = "curated-changelog"
+
+[hooks]
+
+[publish.ignore_paths]
+otf-pdf-syntax = [
+    "**/tests/**",
+]
+otf-pdf-doc = [
+    "**/tests/**",
+]
+otf-pdf-content = [
+    "**/tests/**",
+]
+otf-pdf-font = [
+    "**/tests/**",
+]
+otf-pdf-text = [
+    "**/tests/**",
+]
+otf-pdf = [
+    "**/tests/**",
+]
+
+[[package]]
+name = "otf-pdf-syntax"
+adapter = "crates.io"
+mode = "publish"
+matrix = false
+command = ""
+artifacts = ""
+manifest = "crates/otf-pdf-syntax/Cargo.toml"
+
+[[package]]
+name = "otf-pdf-doc"
+adapter = "crates.io"
+mode = "publish"
+matrix = false
+command = ""
+artifacts = ""
+manifest = "crates/otf-pdf-doc/Cargo.toml"
+
+[[package]]
+name = "otf-pdf-content"
+adapter = "crates.io"
+mode = "publish"
+matrix = false
+command = ""
+artifacts = ""
+manifest = "crates/otf-pdf-content/Cargo.toml"
+
+[[package]]
+name = "otf-pdf-font"
+adapter = "crates.io"
+mode = "publish"
+matrix = false
+command = ""
+artifacts = ""
+manifest = "crates/otf-pdf-font/Cargo.toml"
+
+[[package]]
+name = "otf-pdf-text"
+adapter = "crates.io"
+mode = "publish"
+matrix = false
+command = ""
+artifacts = ""
+manifest = "crates/otf-pdf-text/Cargo.toml"
+
+[[package]]
+name = "otf-pdf"
+adapter = "crates.io"
+mode = "publish"
+matrix = false
+command = ""
+artifacts = ""
+manifest = "crates/otf-pdf/Cargo.toml"

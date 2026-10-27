@@ -16,6 +16,9 @@ cargo-fuzz = true
 libfuzzer-sys = "0.4.13"
 otf-pdf-syntax = { path = "../crates/otf-pdf-syntax" }
 otf-pdf-doc = { path = "../crates/otf-pdf-doc" }
+otf-pdf-content = { path = "../crates/otf-pdf-content" }
+otf-pdf-font = { path = "../crates/otf-pdf-font" }
+otf-pdf-text = { path = "../crates/otf-pdf-text" }
 
 [[bin]]
 name = "header"
@@ -48,6 +51,20 @@ bench = false
 [[bin]]
 name = "save"
 path = "fuzz_targets/save.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "content"
+path = "fuzz_targets/content.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "text"
+path = "fuzz_targets/text.rs"
 test = false
 doc = false
 bench = false

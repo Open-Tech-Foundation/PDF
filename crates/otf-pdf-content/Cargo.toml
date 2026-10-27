@@ -1,0 +1,17 @@
+[package]
+name = "otf-pdf-content"
+description = "Content layer for otf-pdf: content-stream parsing, graphics and text state, and an interpreter that drives a Device."
+readme = "README.md"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+otf-pdf-syntax.workspace = true
+otf-pdf-doc.workspace = true
+
+[lints]
+workspace = true

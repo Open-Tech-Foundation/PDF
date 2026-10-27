@@ -43,6 +43,15 @@ run = "rustup toolchain install 1.88 --profile minimal && cargo +1.88 check --wo
 [tasks."corpus:malformed"]
 run = "./scripts/check-malformed-corpus.sh"
 
+# Every published crate ships a README, so no crates.io page is blank.
+[tasks.readmes]
+run = "./scripts/check-package-readmes.sh"
+
+# The font data tables are generated from pdf.js and Adobe's cmap-resources;
+# the checked-in files must match what the generators produce. Needs network.
+[tasks."fonts:tables"]
+run = "python3 scripts/generate-font-tables.py && python3 scripts/generate-cid-tables.py && git diff --exit-code -- crates/otf-pdf-font/src/tables.rs crates/otf-pdf-font/src/cid_tables.rs"
+
 # Fetch the external corpus at its pinned commits (corpus/sources.tsv).
 [tasks."corpus:fetch"]
 run = "./scripts/fetch-corpus.sh"
@@ -67,4 +76,4 @@ run = "./scripts/fuzz.sh"
 # Python and git. `msrv`, `fuzz`, `interop` and the external corpus need extra tools or
 # downloads and run as their own CI jobs.
 [tasks.ci]
-deps = ["fmt", "clippy", "corpus:malformed", "test", "test:doc", "doc"]
+deps = ["fmt", "clippy", "corpus:malformed", "readmes", "test", "test:doc", "doc"]

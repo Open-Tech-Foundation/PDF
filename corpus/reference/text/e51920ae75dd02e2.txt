@@ -1,0 +1,45 @@
+Parameters
+Page:
+DocNo.:
+Issue:
+Date:
+Page 2
+TEST
+dfdfdfdf
+dfdf
+d
+d
+d
+d
+d
+7. TM Parameters – Synthetic
+GAL-MAN-ASTD-SA-Z-0069
+1.3
+28.09.2010
+Page:
+Doc-No.:
+Issue:
+Date:
+UNCLASSIFIED
+1147 of 1147
+No synthetic parameters defined
+The contents of this document are the copyright of Astrium GmbH. All rights reserved.
+TM Manual for SW Version V3 - Payload Control
+Galileo IOV - Avionics Subsystem
+Page 3
+Nitro PDF Software
+100 Portable Document Lane
+Wonderland
+rpt_TM_04a_ALL_PARAMS_WITHOUT_SYNTHETIC_7_first_page.pdf
+Page 4
+Nitro PDF Software
+100 Portable Document Lane
+Wonderland
+dfdfdfdf
+dfdf
+d
+d
+d
+d
+d
+

@@ -1,8 +1,12 @@
 //! A from-scratch toolkit to parse, edit, sign, verify, generate, validate and
 //! render PDFs.
 //!
-//! This facade is the stable public API (docs/PLAN.md §8); the `otf-pdf-*`
-//! crates behind it are internal and may change freely.
+//! This facade is the public API; the `otf-pdf-*` crates behind it are
+//! internal and may change freely. See the
+//! [API guide](https://github.com/Open-Tech-Foundation/PDF/blob/main/docs/API.md)
+//! for a tour by task, and the
+//! [embedding guide](https://github.com/Open-Tech-Foundation/PDF/blob/main/docs/EMBEDDING.md)
+//! for threading, limits and errors.
 //!
 //! Input is read through the [`Source`] trait, so the caller decides where
 //! bytes come from; this crate does no I/O of its own.
@@ -26,6 +30,16 @@ pub use otf_pdf_doc::{
     SanitizeOptions, SanitizeReport, SaveMode, SaveOptions, Store, decode_text_string,
     encode_text_string,
 };
+pub use otf_pdf_text::{PageText, TextChar, TextExtractor, TextLine, Word};
+/// Content-stream interpretation: run a page through your own
+/// [`Device`](content::Device).
+pub mod content {
+    pub use otf_pdf_content::{
+        Device, FillRule, Font, FontLoader, Glyph, GraphicsState, Image, Matrix, Operation,
+        PathSegment, TextState, page_content, parse_content, run_page,
+    };
+    pub use otf_pdf_font::FontCache;
+}
 pub use otf_pdf_syntax::crypt::{Authentication, CryptMethod, SecurityHandler};
 pub use otf_pdf_syntax::serialize::{to_bytes, write_object};
 pub use otf_pdf_syntax::xref::XrefEntry;
@@ -56,6 +70,7 @@ mod tests {
         shareable::<SecurityHandler>();
         shareable::<SaveOptions>();
         shareable::<Store>();
+        shareable::<PageText>();
     }
 
     #[test]

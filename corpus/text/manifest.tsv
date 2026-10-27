@@ -1,0 +1,15 @@
+# file	group	source text
+hindi-chromium.pdf	indic	hindi.txt
+hindi-libreoffice.pdf	indic	hindi.txt
+bengali-chromium.pdf	indic	bengali.txt
+bengali-libreoffice.pdf	indic	bengali.txt
+tamil-chromium.pdf	indic	tamil.txt
+tamil-libreoffice.pdf	indic	tamil.txt
+telugu-chromium.pdf	indic	telugu.txt
+telugu-libreoffice.pdf	indic	telugu.txt
+chinese-chromium.pdf	cjk	chinese.txt
+chinese-libreoffice.pdf	cjk	chinese.txt
+japanese-chromium.pdf	cjk	japanese.txt
+japanese-libreoffice.pdf	cjk	japanese.txt
+korean-chromium.pdf	cjk	korean.txt
+korean-libreoffice.pdf	cjk	korean.txt

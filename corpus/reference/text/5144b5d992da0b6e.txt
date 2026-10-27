@@ -1,0 +1,53 @@
+PDFBox Testfiles - Forms AlignmentTest
+Copyright © 2014 The Apache Software Foundation
+AlignLeft
+AlignLeft-Border_Small
+AlignLeft-Border_Medium
+AlignLeft-Border_Wide
+AlignLeft-Filled
+AlignLeft-Border_Small-Filled
+AlignLeft-Border_Medium-Filled
+AlignLeft-Border_Wide-Filled
+AlignLeft-Border_Wide_Clipped-Filled
+AlignLeft-Border_Wide_Clipped
+AlignLeft-Border_Wide_Outside-Filled
+AlignLeft-Border_Wide_Outside
+AlignMiddle
+AlignMiddle-Border_Small
+AlignMiddle-Border_Medium
+AlignMiddle-Border_Wide
+AlignMiddle-Border_Wide_Clipped
+AlignMiddle-Border_Medium_Outside
+AlignRight
+AlignRight-Border_Small
+AlignRight-Border_Medium
+AlignRight-Border_Wide
+AlignRight-Border_Wide_Clipped
+AlignRight-Border_Wide_Outside
+asdfASDF1234äöü
+asdfASDF1234äöü
+asdfASDF1234äöü
+asdfASDF1234äöü
+asdfASDF1234äöü
+asdfASDF1234äöü
+AlignMiddle-Filled
+AlignMiddle-Border_Small-Filled
+AlignMiddle-Border_Medium-Filled
+AlignMiddle-Border_Wide-Filled
+AlignMiddle-Border_Wide_Clipped-Filled
+AlignMiddle-Border_Wide_Outside-Filled
+AlignRight-Filled
+AlignRight-Border_Small-Filled
+AlignRight-Border_Medium-Filled
+AlignRight-Border_Wide-Filled
+AlignRight-Border_Wide_Clipped-Filled
+AlignRight-Border_Wide_Outside-Filled
+asdfASDF1234äöü asdfASDF1234äöü
+asdfASDF1234äöü asdfASDF1234äöü
+asdfASDF1234äöü asdfASDF1234äöü
+asdfASDF1234äöü asdfASDF1234äöü
+asdfASDF1234äöü
+asdfASDF1234äöü
+asdfASDF1234äöü
+asdfASDF1234äöü
+
