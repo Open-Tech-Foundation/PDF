@@ -1,9 +1,9 @@
 # PDF
 A from-scratch Rust toolkit to parse, edit, sign, verify, generate, validate and render PDFs.
 
-Status: Phase 0 (foundations). See [docs/PLAN.md](docs/PLAN.md) for the
-roadmap and [docs/DECISIONS.md](docs/DECISIONS.md) for why things are the way
-they are.
+Status: Phase 1 (reading). See [docs/PLAN.md](docs/PLAN.md) for the roadmap,
+[docs/DECISIONS.md](docs/DECISIONS.md) for why things are the way they are,
+and [docs/EMBEDDING.md](docs/EMBEDDING.md) for putting it behind a host API.
 
 ## Development
 

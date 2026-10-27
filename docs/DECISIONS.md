@@ -37,7 +37,7 @@ One content interpreter feeds text extraction, conformance checks, raster and SV
 ## D9: Image codecs
 Raster work and common codecs come from `otf-pixels`. The PDF-specific decoders (JBIG2, JPX, CCITT) are placed in Phase 8; whether they live in `otf-pixels` or `otf-pdf-render` is still open.
 
-## D10: Runs on the CPU offload tier
+## D10: Runs on the CPU offload tier (superseded by D22)
 Heavy `runtime:pdf` operations never run on the isolate thread, unlike WebCrypto in es-runtime.
 
 ## D11: Untrusted input, no ambient I/O, deterministic output
@@ -96,4 +96,12 @@ Passwords are taken as bytes. Each one is also tried in another encoding: Latin-
 - Decryption: every file in `corpus/encrypted` (R2–R6, written by qpdf) decrypts to its known plaintext with both its user and owner passwords.
 - Fuzzing: `header`, `lexer`, `filters` and `document` targets, each run as a CI regression gate.
 - Pages are counted from the tree, not from `/Count`, which is often wrong in damaged files.
-- The matching `runtime:pdf` surface (open, page count, info, diagnostics) belongs in es-runtime and is pending the maintainer's decision on landing it there.
+- No `runtime:pdf` surface is added (D22); embeddability is enforced in this repository instead.
+
+## D22: Embeddable library; no host bindings here
+Supersedes D10 and the `runtime:pdf` deliverables in PLAN §5, §6 and §8. This repository ships a library that hosts embed, as otf-pixels does; it adds no `runtime:pdf` module, here or in es-runtime. What makes it embeddable:
+- A synchronous API with no global state and no thread pool; the caller picks the thread (a host's offload tier, for example).
+- Public types are `Send + Sync`, enforced by a compile-time test in the facade.
+- No I/O, clock or randomness of its own: input through `Source`, and later entropy, timestamps and network through injected traits.
+- Every resource bounded by `Limits`, with a `Budget` hook for the host's own work allowance.
+- docs/EMBEDDING.md documents threading, input, limits, diagnostics and errors for host authors.

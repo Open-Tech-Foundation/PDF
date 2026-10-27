@@ -103,7 +103,7 @@ The dependency direction is strictly downward: `syntax ← doc ← content ← {
 
 ## 5. Phases
 
-Each phase ends with the acceptance criteria met, `cargo test` and clippy clean, fuzzers running, the matching `runtime:pdf` surface added, and `DECISIONS.md` updated.
+Each phase ends with the acceptance criteria met, `cargo test` and clippy clean, fuzzers running, the public API embeddable (DECISIONS.md D22), and `DECISIONS.md` updated.
 
 ### Phase 0: Foundations
 - Workspace, CI, lints, `forbid(unsafe_code)`, and the allowlisted crates in `[workspace.dependencies]`.
@@ -234,6 +234,8 @@ The signer is a trait (`sign(digest) -> signature`) so keys can live in the runt
 
 ## 6. es-runtime integration (`runtime:pdf`)
 
+> Superseded by DECISIONS.md D22: this repository ships an embeddable library only; host bindings are not built here. The notes below describe how a host might embed it.
+
 - es-runtime depends on the `otf-pdf` facade crate.
 - All heavy operations run on the CPU offload tier, never on the isolate thread.
 - Capabilities:
@@ -267,5 +269,5 @@ The signer is a trait (`sign(digest) -> signature`) so keys can live in the runt
 - Work one phase at a time, in order. Do not start the next phase until the current phase's acceptance criteria pass.
 - Any new external crate, `unsafe`, or deviation from this plan: add a `DECISIONS.md` entry first, then stop and ask.
 - Keep the public API in the `otf-pdf` facade; internal crates can change freely.
-- At the end of each phase, update `DECISIONS.md` and add the matching `runtime:pdf` surface.
+- At the end of each phase, update `DECISIONS.md` and keep the public API embeddable (see docs/EMBEDDING.md).
 - Never emit legacy encryption. Never panic on input. Never do I/O outside the injected traits.
