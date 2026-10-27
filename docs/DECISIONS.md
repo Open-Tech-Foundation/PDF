@@ -90,3 +90,10 @@ The allowlist governs what otf-pdf crates link. Tools that never ship are record
 
 ## D20: Password handling
 Passwords are taken as bytes. Each one is also tried in another encoding: Latin-1 for R2–R4 (whose passwords are PDFDocEncoding), and for R5/R6 a partial SASLprep that drops characters mapped to nothing and maps non-ASCII spaces. Full SASLprep needs NFKC normalization tables, which would mean a new dependency or a large generated table; it is left out until a real file needs it. When no password matches but strings and streams use the Identity crypt filter (`/AuthEvent /EFOpen`), the file opens unauthenticated and only embedded files stay encrypted. Public-key security handlers (`Adobe.PubSec`) are not supported; they need the recipient's private key, which belongs with Phase 5's key handling.
+
+## D21: Phase 1 acceptance
+- Corpus: 3829 of 3842 external files open with every page enumerated (99.66%). Page counts are compared with poppler's (`corpus/reference/pages.tsv`); they agree wherever both readers succeed, except `Pages-tree-refs.pdf`, where poppler reports `/Count` (2) and the tree really holds one page. The 13 failures are listed in `corpus/baseline/pages.txt`: 4 public-key encrypted, 5 also unreadable by poppler, 2 with unpublished passwords, 1 Brotli-compressed (not a standard filter), 1 needing full SASLprep (D20).
+- Decryption: every file in `corpus/encrypted` (R2–R6, written by qpdf) decrypts to its known plaintext with both its user and owner passwords.
+- Fuzzing: `header`, `lexer`, `filters` and `document` targets, each run as a CI regression gate.
+- Pages are counted from the tree, not from `/Count`, which is often wrong in damaged files.
+- The matching `runtime:pdf` surface (open, page count, info, diagnostics) belongs in es-runtime and is pending the maintainer's decision on landing it there.
