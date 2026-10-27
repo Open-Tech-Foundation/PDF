@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 use otf_pdf::{
     Authentication, Document, Encryption, Entropy, ObjId, Object, OpenOptions, Permissions, Rect,
-    SaveMode, SaveOptions, Strictness, Version, XrefEntry, to_bytes,
+    SanitizeOptions, SaveMode, SaveOptions, Strictness, Version, XrefEntry, to_bytes,
 };
 
 /// Every input was processed.
@@ -39,6 +39,8 @@ Commands:
   merge <out> <in>...         Concatenate the pages of several files
   extract <in> <out> <pages>  Keep only <pages>, e.g. 1-3,5,8-
   delete <in> <out> <pages>   Remove <pages>
+  sanitize <in> <out>         Remove scripts, risky actions, attachments, XFA
+                              and multimedia (--all: links and metadata too)
   rotate <in> <out> <pages> <degrees>
                               Rotate <pages> clockwise by a multiple of 90
   help                        Print this help
@@ -47,6 +49,7 @@ Options:
   --password <pw>             Password for an encrypted file
   --strict                    Fail instead of repairing malformed input
   --data                      dump: write a stream's decoded data, raw
+  --all                       sanitize: remove every category
   --incremental               Append changes instead of rewriting
   --classic-xref              Write a classic xref table, no object streams
   --pdf-version <1.7|2.0>     Output version of a full save
@@ -68,6 +71,7 @@ struct Options {
     password: Vec<u8>,
     strict: bool,
     data: bool,
+    all: bool,
     incremental: bool,
     classic_xref: bool,
     pdf_version: Option<Version>,
@@ -90,6 +94,7 @@ fn parse_options(args: &[OsString]) -> Result<Options, String> {
             }
             Some("--strict") => options.strict = true,
             Some("--data") => options.data = true,
+            Some("--all") => options.all = true,
             Some("--incremental") => options.incremental = true,
             Some("--classic-xref") => options.classic_xref = true,
             Some("--pdf-version") => {
@@ -147,9 +152,9 @@ fn run(args: &[OsString], out: &mut dyn Write, err: &mut dyn Write) -> u8 {
         "info" => with_document(&options, err, &command, |doc| info(doc, out)),
         "pages" => with_document(&options, err, &command, |doc| pages(doc, out)),
         "objects" => with_document(&options, err, &command, |doc| objects(doc, out)),
-        "save" | "extract" | "delete" | "rotate" => {
+        "save" | "sanitize" | "extract" | "delete" | "rotate" => {
             let want = match &*command {
-                "save" => 2,
+                "save" | "sanitize" => 2,
                 "rotate" => 4,
                 _ => 3,
             };
@@ -328,6 +333,19 @@ fn edit_and_save(doc: &mut Document, command: &str, options: &Options) -> Result
     };
     let count = doc.page_count().map_err(|e| e.to_string())?;
     match command {
+        "sanitize" => {
+            let sanitize = if options.all {
+                SanitizeOptions::ALL
+            } else {
+                SanitizeOptions::default()
+            };
+            let report = doc.sanitize(&sanitize).map_err(|e| e.to_string())?;
+            // Only a full save drops what was removed (DECISIONS D26).
+            if options.incremental {
+                return Err("sanitize needs a full save; drop --incremental".into());
+            }
+            eprintln!("removed: {report:?}");
+        }
         "extract" => {
             let pages = parse_pages(&arg(2), count)?;
             doc.select_pages(&pages).map_err(|e| e.to_string())?;

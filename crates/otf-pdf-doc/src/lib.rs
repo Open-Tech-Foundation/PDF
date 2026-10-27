@@ -6,6 +6,7 @@
 mod document;
 mod edit;
 mod pages;
+mod sanitize;
 mod save;
 mod store;
 mod text;
@@ -14,6 +15,7 @@ mod xmp;
 pub use document::{Attachment, Document, Info, OutlineItem, name_tree};
 pub use edit::{AttachmentOptions, import};
 pub use pages::{Page, Rect};
+pub use sanitize::{SanitizeOptions, SanitizeReport};
 pub use save::{Encryption, SaveMode, SaveOptions};
 pub use store::Store;
 pub use text::{decode_text_string, encode_text_string, pdf_doc_char};

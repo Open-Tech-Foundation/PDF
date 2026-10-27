@@ -390,3 +390,24 @@ fn merge_extract_delete() {
     let output = bin().arg("save").arg(&merged).output().unwrap();
     assert_eq!(output.status.code(), Some(2));
 }
+
+#[test]
+fn sanitize_command() {
+    let out = tmp("sanitized.pdf");
+    let output = bin()
+        .args(["sanitize", "--all"])
+        .arg(malformed("minimal-valid.pdf"))
+        .arg(&out)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(stderr(&output).starts_with("removed: "));
+    assert_eq!(page_count(&out, ""), "1");
+    let output = bin()
+        .args(["sanitize", "--incremental"])
+        .arg(malformed("minimal-valid.pdf"))
+        .arg(&out)
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(1));
+}

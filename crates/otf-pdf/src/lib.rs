@@ -22,8 +22,9 @@
 #![forbid(unsafe_code)]
 
 pub use otf_pdf_doc::{
-    Attachment, AttachmentOptions, Document, Encryption, Info, OutlineItem, Page, Rect, SaveMode,
-    SaveOptions, Store, decode_text_string, encode_text_string,
+    Attachment, AttachmentOptions, Document, Encryption, Info, OutlineItem, Page, Rect,
+    SanitizeOptions, SanitizeReport, SaveMode, SaveOptions, Store, decode_text_string,
+    encode_text_string,
 };
 pub use otf_pdf_syntax::crypt::{Authentication, CryptMethod, SecurityHandler};
 pub use otf_pdf_syntax::serialize::{to_bytes, write_object};

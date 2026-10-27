@@ -7,6 +7,9 @@ versioning: [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- `Document::sanitize` with `SanitizeOptions` and `SanitizeReport`: removes
+  JavaScript, external actions, attachments, XFA, multimedia and optionally
+  links and metadata (D26); CLI `sanitize`.
 - Phase 2 saving:
   - Copy-on-write `Store` under `Document`: edits, additions and deletions
     shadow the untouched base file (`store_mut`, `set`, `add`, `delete`,
