@@ -210,6 +210,8 @@ dependencies = [
 name = "otf-pdf-doc"
 version = "0.1.0"
 dependencies = [
+ "flate2",
+ "md-5",
  "otf-pdf-syntax",
 ]
 

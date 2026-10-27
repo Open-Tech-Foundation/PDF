@@ -2,9 +2,9 @@
 
 use std::collections::HashSet;
 
-use otf_pdf_syntax::{
-    DiagnosticKind, Dict, Error, File, LimitKind, ObjId, Object, Result, Strictness,
-};
+use otf_pdf_syntax::{DiagnosticKind, Dict, Error, LimitKind, ObjId, Object, Result, Strictness};
+
+use crate::store::Store;
 
 /// A rectangle `[llx lly urx ury]`, normalized so `llx <= urx` and
 /// `lly <= ury`.
@@ -111,7 +111,7 @@ fn is_pages_node(dict: &Dict) -> bool {
 
 /// Walks the page tree from the catalog's `/Pages`. In lenient mode a broken
 /// tree falls back to every `/Type /Page` object in the file.
-pub fn collect_pages(file: &File, catalog: &Dict) -> Result<Vec<Page>> {
+pub fn collect_pages(file: &Store, catalog: &Dict) -> Result<Vec<Page>> {
     let walked = match catalog.get(b"Pages") {
         Some(root) => walk(file, root),
         None => Err(Error::syntax(0, "catalog has no /Pages")),
@@ -134,7 +134,7 @@ pub fn collect_pages(file: &File, catalog: &Dict) -> Result<Vec<Page>> {
     }
 }
 
-fn walk(file: &File, root: &Object) -> Result<Vec<Page>> {
+fn walk(file: &Store, root: &Object) -> Result<Vec<Page>> {
     let limits = file.limits();
     let mut pages = Vec::new();
     let mut visited: HashSet<ObjId> = HashSet::new();
@@ -186,7 +186,7 @@ fn walk(file: &File, root: &Object) -> Result<Vec<Page>> {
     Ok(pages)
 }
 
-fn bad_node(file: &File, id: Option<ObjId>) -> Result<()> {
+fn bad_node(file: &Store, id: Option<ObjId>) -> Result<()> {
     if file.strictness() == Strictness::Strict {
         return Err(Error::syntax(0, "bad page tree node"));
     }
@@ -195,7 +195,7 @@ fn bad_node(file: &File, id: Option<ObjId>) -> Result<()> {
     Ok(())
 }
 
-fn make_page(file: &File, id: Option<ObjId>, dict: Dict, attrs: &Inherited) -> Page {
+fn make_page(file: &Store, id: Option<ObjId>, dict: Dict, attrs: &Inherited) -> Page {
     let rect = |o: &Option<Object>| {
         o.as_ref()
             .map(|o| file.resolve(o))
@@ -225,11 +225,11 @@ fn make_page(file: &File, id: Option<ObjId>, dict: Dict, attrs: &Inherited) -> P
 
 /// Every object with `/Type /Page`, in object-number order: the fallback
 /// for a page tree that yields nothing.
-fn scan_for_pages(file: &File) -> Result<Vec<Page>> {
+fn scan_for_pages(file: &Store) -> Result<Vec<Page>> {
     let mut pages = Vec::new();
-    for &num in file.entries().keys() {
+    for id in file.object_ids() {
         file.limits().charge(1)?;
-        let Ok(obj) = file.get(ObjId::new(num, 0)) else {
+        let Ok(obj) = file.get(id) else {
             continue;
         };
         let Some(dict) = obj.as_dict() else { continue };
@@ -256,15 +256,48 @@ fn scan_for_pages(file: &File) -> Result<Vec<Page>> {
                 attrs = attrs.with(ancestor);
             }
             let attrs = attrs.with(dict);
-            pages.push(make_page(
-                file,
-                Some(ObjId::new(num, 0)),
-                dict.clone(),
-                &attrs,
-            ));
+            pages.push(make_page(file, Some(id), dict.clone(), &attrs));
         }
     }
     Ok(pages)
+}
+
+impl Rect {
+    /// The rectangle as a PDF array.
+    pub fn to_object(&self) -> Object {
+        Object::Array(vec![
+            Object::Real(self.llx),
+            Object::Real(self.lly),
+            Object::Real(self.urx),
+            Object::Real(self.ury),
+        ])
+    }
+}
+
+/// The page's dictionary with its inherited attributes written into it and
+/// `/Parent` removed, so it can be placed under any parent (or copied into
+/// another document) without losing its boxes, rotation or resources.
+pub fn standalone_page_dict(page: &Page) -> Dict {
+    let mut dict = page.dict.clone();
+    dict.remove(b"Parent");
+    dict.insert("Type", otf_pdf_syntax::Name::from("Page"));
+    dict.insert("MediaBox", page.media_box.to_object());
+    if page.crop_box != page.media_box {
+        dict.insert("CropBox", page.crop_box.to_object());
+    } else {
+        dict.remove(b"CropBox");
+    }
+    if page.rotate != 0 {
+        dict.insert("Rotate", i64::from(page.rotate));
+    } else {
+        dict.remove(b"Rotate");
+    }
+    if !dict.contains_key(b"Resources")
+        && let Some(res) = &page.resources
+    {
+        dict.insert("Resources", res.clone());
+    }
+    dict
 }
 
 #[cfg(test)]

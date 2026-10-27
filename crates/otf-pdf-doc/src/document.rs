@@ -9,6 +9,7 @@ use otf_pdf_syntax::{
 };
 
 use crate::pages::{Page, collect_pages};
+use crate::store::Store;
 use crate::text::decode_text_string;
 
 /// The document information dictionary (§14.3.3), decoded.
@@ -71,8 +72,7 @@ pub struct Attachment {
 /// A document opened for reading.
 #[derive(Debug)]
 pub struct Document {
-    file: File,
-    catalog: Dict,
+    pub(crate) store: Store,
     pages: OnceLock<std::result::Result<Arc<Vec<Page>>, Error>>,
 }
 
@@ -86,30 +86,56 @@ impl Document {
     pub fn open_shared(source: SharedSource, options: OpenOptions) -> Result<Self> {
         let file = File::open(source, options)?;
         let root = file.trailer().get(b"Root").cloned().unwrap_or_default();
-        let catalog = file.resolve_dict(&root).ok_or(Error::NoRoot)?;
+        file.resolve_dict(&root).ok_or(Error::NoRoot)?;
         Ok(Self {
-            file,
-            catalog,
+            store: Store::new(file),
             pages: OnceLock::new(),
         })
     }
 
-    /// The syntax-level file, for direct object access.
+    /// The base file as read, without edits.
     pub fn file(&self) -> &File {
-        &self.file
+        self.store.file()
     }
 
-    /// The document catalog.
-    pub fn catalog(&self) -> &Dict {
-        &self.catalog
+    /// The object store: the base file plus edits.
+    pub fn store(&self) -> &Store {
+        &self.store
+    }
+
+    /// Mutable access to the store for low-level edits. Cached derived data
+    /// (the page list) is dropped, since any edit may change it.
+    pub fn store_mut(&mut self) -> &mut Store {
+        self.invalidate();
+        &mut self.store
+    }
+
+    /// Drops cached derived data after an edit.
+    pub(crate) fn invalidate(&mut self) {
+        self.pages = OnceLock::new();
+    }
+
+    /// The catalog's id, if it is an indirect object (it always is in a
+    /// valid file).
+    pub fn catalog_id(&self) -> Option<ObjId> {
+        self.store.trailer().get_ref(b"Root")
+    }
+
+    /// The document catalog, with edits.
+    pub fn catalog(&self) -> Dict {
+        self.store
+            .trailer()
+            .get(b"Root")
+            .and_then(|r| self.store.resolve_dict(r))
+            .unwrap_or_default()
     }
 
     /// The PDF version: the header's, or the catalog's `/Version` when that
     /// is later (§7.2.2).
     pub fn version(&self) -> Option<Version> {
-        let header = self.file.header().map(|h| h.version);
+        let header = self.file().header().map(|h| h.version);
         let catalog = self
-            .catalog
+            .catalog()
             .get_name(b"Version")
             .and_then(|v| otf_pdf_syntax::find_header(&[b"%PDF-", v].concat()[..]).ok())
             .map(|h| h.version);
@@ -121,18 +147,18 @@ impl Document {
 
     /// Repairs made while reading, so far.
     pub fn diagnostics(&self) -> Vec<Diagnostic> {
-        self.file.diagnostics()
+        self.file().diagnostics()
     }
 
     /// Whether the file is encrypted.
     pub fn is_encrypted(&self) -> bool {
-        self.file.security().is_some()
+        self.file().security().is_some()
     }
 
     /// The pages, in order. Computed once.
     pub fn pages(&self) -> Result<Arc<Vec<Page>>> {
         self.pages
-            .get_or_init(|| collect_pages(&self.file, &self.catalog).map(Arc::new))
+            .get_or_init(|| collect_pages(&self.store, &self.catalog()).map(Arc::new))
             .clone()
     }
 
@@ -144,14 +170,14 @@ impl Document {
     /// The document information dictionary, decoded.
     pub fn info(&self) -> Info {
         let Some(dict) = self
-            .file
+            .store
             .trailer()
             .get(b"Info")
-            .and_then(|i| self.file.resolve_dict(i))
+            .and_then(|i| self.store.resolve_dict(i))
         else {
             return Info::default();
         };
-        let text = |key: &[u8]| match self.file.resolve(dict.get(key)?) {
+        let text = |key: &[u8]| match self.store.resolve(dict.get(key)?) {
             Object::String(s) => Some(decode_text_string(&s.bytes)),
             Object::Name(n) => Some(String::from_utf8_lossy(n.as_bytes()).into_owned()),
             _ => None,
@@ -171,26 +197,26 @@ impl Document {
 
     /// The catalog's XMP metadata packet, decoded, if present.
     pub fn xmp_metadata(&self) -> Result<Option<Vec<u8>>> {
-        let Some(meta) = self.catalog.get(b"Metadata") else {
+        let Some(meta) = self.catalog().get(b"Metadata").cloned() else {
             return Ok(None);
         };
-        let Object::Stream(stream) = self.file.resolve(meta) else {
+        let Object::Stream(stream) = self.store.resolve(&meta) else {
             return Ok(None);
         };
-        Ok(Some(self.file.decode_stream(&stream)?.data))
+        Ok(Some(self.store.decode_stream(&stream)?.data))
     }
 
     /// The outline (bookmark) tree.
     pub fn outlines(&self) -> Result<Vec<OutlineItem>> {
         let Some(root) = self
-            .catalog
+            .catalog()
             .get(b"Outlines")
-            .and_then(|o| self.file.resolve_dict(o))
+            .and_then(|o| self.store.resolve_dict(o))
         else {
             return Ok(Vec::new());
         };
         let mut seen = HashSet::new();
-        let mut budget = self.file.limits().max_objects as usize;
+        let mut budget = self.store.limits().max_objects as usize;
         self.outline_children(&root, 0, &mut seen, &mut budget)
     }
 
@@ -201,7 +227,7 @@ impl Document {
         seen: &mut HashSet<ObjId>,
         budget: &mut usize,
     ) -> Result<Vec<OutlineItem>> {
-        if depth > self.file.limits().max_depth {
+        if depth > self.store.limits().max_depth {
             return Err(Error::Limit(LimitKind::Depth));
         }
         let mut items = Vec::new();
@@ -215,12 +241,12 @@ impl Document {
             *budget = budget
                 .checked_sub(1)
                 .ok_or(Error::Limit(LimitKind::Objects))?;
-            self.file.limits().charge(1)?;
-            let Some(dict) = self.file.resolve_dict(&node) else {
+            self.store.limits().charge(1)?;
+            let Some(dict) = self.store.resolve_dict(&node) else {
                 break;
             };
             let title = match self
-                .file
+                .store
                 .resolve(dict.get(b"Title").unwrap_or(&Object::Null))
             {
                 Object::String(s) => decode_text_string(&s.bytes),
@@ -230,8 +256,8 @@ impl Document {
             items.push(OutlineItem {
                 id,
                 title,
-                dest: dict.get(b"Dest").map(|d| self.file.resolve(d)),
-                action: dict.get(b"A").and_then(|a| self.file.resolve_dict(a)),
+                dest: dict.get(b"Dest").map(|d| self.store.resolve(d)),
+                action: dict.get(b"A").and_then(|a| self.store.resolve_dict(a)),
                 open: dict.get_int(b"Count").is_some_and(|c| c > 0),
                 children,
             });
@@ -243,32 +269,32 @@ impl Document {
     /// The embedded files listed in the `/EmbeddedFiles` name tree.
     pub fn attachments(&self) -> Result<Vec<Attachment>> {
         let Some(tree) = self
-            .catalog
+            .catalog()
             .get(b"Names")
-            .and_then(|n| self.file.resolve_dict(n))
+            .and_then(|n| self.store.resolve_dict(n))
             .and_then(|names| names.get(b"EmbeddedFiles").cloned())
         else {
             return Ok(Vec::new());
         };
-        let entries = name_tree(&self.file, &tree)?;
+        let entries = name_tree(&self.store, &tree)?;
         Ok(entries
             .into_iter()
             .filter_map(|(key, value)| {
-                let spec = self.file.resolve_dict(&value)?;
-                let text = |k: &[u8]| match self.file.resolve(spec.get(k)?) {
+                let spec = self.store.resolve_dict(&value)?;
+                let text = |k: &[u8]| match self.store.resolve(spec.get(k)?) {
                     Object::String(s) => Some(decode_text_string(&s.bytes)),
                     _ => None,
                 };
-                let ef = spec.get(b"EF").and_then(|e| self.file.resolve_dict(e));
+                let ef = spec.get(b"EF").and_then(|e| self.store.resolve_dict(e));
                 let stream_ref = ef
                     .as_ref()
                     .and_then(|ef| ef.get(b"UF").or_else(|| ef.get(b"F")))
                     .and_then(Object::as_ref);
-                let stream_dict = stream_ref.and_then(|r| self.file.resolve_dict(&Object::Ref(r)));
+                let stream_dict = stream_ref.and_then(|r| self.store.resolve_dict(&Object::Ref(r)));
                 let params = stream_dict
                     .as_ref()
                     .and_then(|d| d.get(b"Params"))
-                    .and_then(|p| self.file.resolve_dict(p));
+                    .and_then(|p| self.store.resolve_dict(p));
                 Some(Attachment {
                     name: decode_text_string(&key),
                     filename: text(b"UF").or_else(|| text(b"F")),
@@ -292,22 +318,22 @@ impl Document {
             expected: "embedded file stream",
             found: "null",
         })?;
-        if let Some(sec) = self.file.security()
+        if let Some(sec) = self.file().security()
             && !sec.is_authenticated()
         {
             return Err(Error::InvalidPassword);
         }
-        let obj = self.file.get(id)?;
+        let obj = self.store.get(id)?;
         let stream = obj.as_stream().ok_or(Error::WrongType {
             expected: "stream",
             found: obj.type_name(),
         })?;
-        Ok(self.file.decode_stream(stream)?.data)
+        Ok(self.store.decode_stream(stream)?.data)
     }
 }
 
 /// Every (key, value) pair of a name tree (§7.9.6), in tree order.
-pub fn name_tree(file: &File, root: &Object) -> Result<Vec<(Vec<u8>, Object)>> {
+pub fn name_tree(file: &Store, root: &Object) -> Result<Vec<(Vec<u8>, Object)>> {
     let mut out = Vec::new();
     let mut seen = HashSet::new();
     let mut stack = vec![(root.clone(), 0u32)];

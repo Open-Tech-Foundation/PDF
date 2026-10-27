@@ -11,6 +11,8 @@ authors.workspace = true
 
 [dependencies]
 otf-pdf-syntax.workspace = true
+flate2.workspace = true
+md-5.workspace = true
 
 [lints]
 workspace = true

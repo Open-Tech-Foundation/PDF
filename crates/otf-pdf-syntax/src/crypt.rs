@@ -1,8 +1,8 @@
 //! The standard security handler, read side (ISO 32000-2 §7.6).
 //!
 //! Reads revisions 2 to 6: RC4 with 40- to 128-bit keys, AES-128 and
-//! AES-256, including the deprecated revision 5. Writing is AES-256 only and
-//! lives with the save path (Phase 2).
+//! AES-256, including the deprecated revision 5. Writes revision 6 (AES-256)
+//! only, never RC4 or AES-128 (docs/PLAN.md §2).
 
 use aes::cipher::{BlockDecryptMut, BlockEncryptMut, KeyIvInit, block_padding::NoPadding};
 use md5::{Digest, Md5};
@@ -10,7 +10,7 @@ use rc4::{KeyInit, Rc4, StreamCipher, consts};
 use sha2::{Sha256, Sha384, Sha512};
 
 use crate::error::{Error, Result};
-use crate::object::{Dict, ObjId, Object};
+use crate::object::{Dict, Name, ObjId, Object, PdfString};
 
 /// Padding for passwords shorter than 32 bytes (Algorithm 2, step a).
 const PAD: [u8; 32] = [
@@ -586,6 +586,252 @@ fn aes_cbc_decrypt(key: &[u8], data: &[u8]) -> Vec<u8> {
     buf
 }
 
+/// Randomness, injected by the host (docs/PLAN.md §2: no ambient I/O).
+/// Encryption takes keys, salts and IVs from it; a deterministic source gives
+/// byte-identical output.
+pub trait Entropy: Send + Sync {
+    /// Fills `buf` with random bytes.
+    fn fill(&self, buf: &mut [u8]);
+}
+
+/// What an encrypted document allows a user-password reader to do
+/// (ISO 32000-2 Table 22). The owner password allows everything.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Permissions {
+    /// Print (bit 3).
+    pub print: bool,
+    /// Modify contents (bit 4).
+    pub modify: bool,
+    /// Copy or extract text and graphics (bit 5).
+    pub copy: bool,
+    /// Add or modify annotations and fill forms (bit 6).
+    pub annotate: bool,
+    /// Fill in form fields (bit 9).
+    pub fill_forms: bool,
+    /// Extract for accessibility (bit 10).
+    pub accessibility: bool,
+    /// Assemble: insert, rotate, delete pages (bit 11).
+    pub assemble: bool,
+    /// Print at full quality (bit 12).
+    pub print_high_quality: bool,
+}
+
+impl Permissions {
+    /// Everything allowed.
+    pub const ALL: Permissions = Permissions {
+        print: true,
+        modify: true,
+        copy: true,
+        annotate: true,
+        fill_forms: true,
+        accessibility: true,
+        assemble: true,
+        print_high_quality: true,
+    };
+
+    /// The `/P` value: reserved bits 7, 8 and 13–32 set, 1–2 clear.
+    pub fn bits(&self) -> u32 {
+        let mut p: u32 = 0xffff_f0c0;
+        for (on, bit) in [
+            (self.print, 3),
+            (self.modify, 4),
+            (self.copy, 5),
+            (self.annotate, 6),
+            (self.fill_forms, 9),
+            (self.accessibility, 10),
+            (self.assemble, 11),
+            (self.print_high_quality, 12),
+        ] {
+            if on {
+                p |= 1 << (bit - 1);
+            }
+        }
+        p
+    }
+
+    /// The permissions encoded in a `/P` value.
+    pub fn from_bits(p: u32) -> Self {
+        let bit = |n: u32| p & (1 << (n - 1)) != 0;
+        Self {
+            print: bit(3),
+            modify: bit(4),
+            copy: bit(5),
+            annotate: bit(6),
+            fill_forms: bit(9),
+            accessibility: bit(10),
+            assemble: bit(11),
+            print_high_quality: bit(12),
+        }
+    }
+}
+
+impl Default for Permissions {
+    fn default() -> Self {
+        Self::ALL
+    }
+}
+
+impl SecurityHandler {
+    /// Creates a revision 6 (AES-256) handler for writing, and the
+    /// `/Encrypt` dictionary that describes it (Algorithms 8, 9 and 10).
+    pub fn new_aes256(
+        user_password: &[u8],
+        owner_password: &[u8],
+        permissions: Permissions,
+        encrypt_metadata: bool,
+        entropy: &dyn Entropy,
+    ) -> (Self, Dict) {
+        let truncate = |pw: &[u8]| pw.get(..pw.len().min(127)).unwrap_or_default().to_vec();
+        let (user, owner) = (truncate(user_password), truncate(owner_password));
+        let mut key = [0u8; 32];
+        entropy.fill(&mut key);
+        let mut salts = [0u8; 32];
+        entropy.fill(&mut salts);
+        let (uvs, rest) = salts.split_at(8);
+        let (uks, rest) = rest.split_at(8);
+        let (ovs, oks) = rest.split_at(8);
+
+        let wrap = |intermediate: &[u8]| -> Vec<u8> {
+            let mut buf = key.to_vec();
+            if let Ok(enc) =
+                cbc::Encryptor::<aes::Aes256>::new_from_slices(intermediate, &[0u8; 16])
+            {
+                let _ = enc.encrypt_padded_mut::<NoPadding>(&mut buf, 32);
+            }
+            buf
+        };
+        let mut u = hash_2b(&user, uvs, &[]);
+        u.extend_from_slice(uvs);
+        u.extend_from_slice(uks);
+        let ue = wrap(&hash_2b(&user, uks, &[]));
+        let mut o = hash_2b(&owner, ovs, &u);
+        o.extend_from_slice(ovs);
+        o.extend_from_slice(oks);
+        let oe = wrap(&hash_2b(&owner, oks, &u));
+
+        let p = permissions.bits();
+        let mut perms = [0u8; 16];
+        perms[..4].copy_from_slice(&p.to_le_bytes());
+        perms[4..8].copy_from_slice(&[0xff; 4]);
+        perms[8] = if encrypt_metadata { b'T' } else { b'F' };
+        perms[9..12].copy_from_slice(b"adb");
+        entropy.fill(&mut perms[12..]);
+        if let Ok(enc) = cbc::Encryptor::<aes::Aes256>::new_from_slices(&key, &[0u8; 16]) {
+            // One block with a zero IV is ECB, which Algorithm 10 specifies.
+            let _ = enc.encrypt_padded_mut::<NoPadding>(&mut perms, 16);
+        }
+
+        let mut std_cf = Dict::new();
+        std_cf.insert("AuthEvent", Name::from("DocOpen"));
+        std_cf.insert("CFM", Name::from("AESV3"));
+        std_cf.insert("Length", 32i64);
+        let mut cf = Dict::new();
+        cf.insert("StdCF", std_cf);
+        let mut dict = Dict::new();
+        dict.insert("Filter", Name::from("Standard"));
+        dict.insert("V", 5i64);
+        dict.insert("R", 6i64);
+        dict.insert("Length", 256i64);
+        dict.insert("CF", cf);
+        dict.insert("StmF", Name::from("StdCF"));
+        dict.insert("StrF", Name::from("StdCF"));
+        dict.insert("O", PdfString::hex(o));
+        dict.insert("U", PdfString::hex(u));
+        dict.insert("OE", PdfString::hex(oe));
+        dict.insert("UE", PdfString::hex(ue));
+        dict.insert("Perms", PdfString::hex(perms.to_vec()));
+        dict.insert("P", i64::from(p as i32));
+        if !encrypt_metadata {
+            dict.insert("EncryptMetadata", false);
+        }
+        let handler = Self {
+            revision: 6,
+            key: key.to_vec(),
+            strings: CryptMethod::AesV3,
+            streams: CryptMethod::AesV3,
+            embedded_files: CryptMethod::AesV3,
+            encrypt_metadata,
+            permissions: p,
+            authentication: Authentication::Owner,
+        };
+        (handler, dict)
+    }
+
+    /// Whether this handler can encrypt new data: only AES-256 is ever
+    /// written (D4); a file using RC4 or AES-128 must be re-encrypted by a
+    /// full save instead.
+    pub fn can_encrypt(&self) -> bool {
+        self.is_authenticated()
+            && [self.strings, self.streams]
+                .iter()
+                .all(|m| matches!(m, CryptMethod::AesV3 | CryptMethod::Identity))
+    }
+
+    /// Encrypts `data` for object `id` with `method` (AES-256 or Identity).
+    pub fn encrypt(
+        &self,
+        method: CryptMethod,
+        data: &[u8],
+        entropy: &dyn Entropy,
+    ) -> Result<Vec<u8>> {
+        match method {
+            CryptMethod::Identity => Ok(data.to_vec()),
+            CryptMethod::AesV3 => {
+                let mut iv = [0u8; 16];
+                entropy.fill(&mut iv);
+                let pad = 16 - data.len() % 16;
+                let mut buf = data.to_vec();
+                buf.resize(data.len() + pad, pad as u8);
+                let len = buf.len();
+                cbc::Encryptor::<aes::Aes256>::new_from_slices(&self.key, &iv)
+                    .map_err(|_| Error::UnsupportedEncryption("bad AES-256 key".into()))?
+                    .encrypt_padded_mut::<NoPadding>(&mut buf, len)
+                    .map_err(|_| Error::UnsupportedEncryption("AES padding".into()))?;
+                let mut out = iv.to_vec();
+                out.extend_from_slice(&buf);
+                Ok(out)
+            }
+            _ => Err(Error::UnsupportedEncryption(
+                "only AES-256 is written; save in full to re-encrypt".into(),
+            )),
+        }
+    }
+
+    /// Encrypts every string inside `object` in place (streams' data is
+    /// left to [`SecurityHandler::encrypt`]).
+    pub fn encrypt_strings(&self, object: &mut Object, entropy: &dyn Entropy) -> Result<()> {
+        match object {
+            Object::String(s) => {
+                s.bytes = self.encrypt(self.strings, &s.bytes, entropy)?;
+                Ok(())
+            }
+            Object::Array(items) => items
+                .iter_mut()
+                .try_for_each(|i| self.encrypt_strings(i, entropy)),
+            Object::Dict(d) => self.encrypt_dict_strings(d, entropy),
+            Object::Stream(st) => self.encrypt_dict_strings(&mut st.dict, entropy),
+            _ => Ok(()),
+        }
+    }
+
+    fn encrypt_dict_strings(&self, dict: &mut Dict, entropy: &dyn Entropy) -> Result<()> {
+        let is_signature = dict.is_type(b"Sig")
+            || dict.is_type(b"DocTimeStamp")
+            || dict.contains_key(b"ByteRange");
+        let keys: Vec<_> = dict.iter().map(|(k, _)| k.clone()).collect();
+        for key in keys {
+            if is_signature && key.as_bytes() == b"Contents" {
+                continue;
+            }
+            if let Some(mut value) = dict.remove(key.as_bytes()) {
+                self.encrypt_strings(&mut value, entropy)?;
+                dict.insert(key, value);
+            }
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -689,6 +935,108 @@ mod tests {
         assert_eq!(
             SecurityHandler::new(&d, b"", b"").err(),
             Some(Error::InvalidPassword)
+        );
+    }
+
+    /// A deterministic test entropy source: a counter.
+    struct Counter(std::sync::atomic::AtomicU8);
+
+    impl Entropy for Counter {
+        fn fill(&self, buf: &mut [u8]) {
+            for b in buf {
+                *b = self.0.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            }
+        }
+    }
+
+    #[test]
+    fn permissions_bits() {
+        assert_eq!(
+            Permissions::ALL.bits(),
+            0xffff_ffc0 | 0b1111 << 2 | 0xf << 8
+        );
+        let none = Permissions::from_bits(0xffff_f0c0);
+        assert!(!none.print && !none.copy && !none.assemble);
+        assert_eq!(
+            Permissions::from_bits(Permissions::ALL.bits()),
+            Permissions::ALL
+        );
+        let print_only = Permissions {
+            print: true,
+            ..Permissions::from_bits(0)
+        };
+        assert_eq!(print_only.bits(), 0xffff_f0c4);
+    }
+
+    #[test]
+    fn aes256_write_then_read() {
+        let entropy = Counter(Default::default());
+        let perms = Permissions {
+            copy: false,
+            ..Permissions::ALL
+        };
+        let (writer, dict) = SecurityHandler::new_aes256(b"user", b"owner", perms, true, &entropy);
+        assert!(writer.can_encrypt());
+        let id = ObjId::new(7, 0);
+        let secret = b"attack at dawn".to_vec();
+        let encrypted = writer
+            .encrypt(CryptMethod::AesV3, &secret, &entropy)
+            .unwrap();
+        assert_eq!(encrypted.len(), 16 + 16);
+
+        for (pw, auth) in [
+            (&b"user"[..], Authentication::User),
+            (b"owner", Authentication::Owner),
+        ] {
+            let reader = SecurityHandler::new(&dict, b"", pw).unwrap();
+            assert_eq!(reader.authentication(), auth);
+            assert_eq!(reader.revision(), 6);
+            assert_eq!(Permissions::from_bits(reader.permissions()), perms);
+            assert_eq!(reader.decrypt(id, CryptMethod::AesV3, &encrypted), secret);
+        }
+        assert_eq!(
+            SecurityHandler::new(&dict, b"", b"nope").err(),
+            Some(Error::InvalidPassword)
+        );
+
+        let mut obj = Object::Array(vec![Object::String(PdfString::literal("hi"))]);
+        writer.encrypt_strings(&mut obj, &entropy).unwrap();
+        let reader = SecurityHandler::new(&dict, b"", b"user").unwrap();
+        reader.decrypt_strings(id, &mut obj);
+        assert_eq!(obj.as_array().unwrap()[0].as_string(), Some(&b"hi"[..]));
+    }
+
+    #[test]
+    fn same_entropy_same_output() {
+        let a = SecurityHandler::new_aes256(
+            b"u",
+            b"o",
+            Permissions::ALL,
+            false,
+            &Counter(Default::default()),
+        )
+        .1;
+        let b = SecurityHandler::new_aes256(
+            b"u",
+            b"o",
+            Permissions::ALL,
+            false,
+            &Counter(Default::default()),
+        )
+        .1;
+        assert_eq!(a, b);
+        assert_eq!(a.get(b"EncryptMetadata"), Some(&Object::Bool(false)));
+    }
+
+    #[test]
+    fn legacy_methods_are_never_written() {
+        let entropy = Counter(Default::default());
+        let (h, _) = SecurityHandler::new_aes256(b"", b"", Permissions::ALL, true, &entropy);
+        assert!(h.encrypt(CryptMethod::Rc4, b"x", &entropy).is_err());
+        assert!(h.encrypt(CryptMethod::AesV2, b"x", &entropy).is_err());
+        assert_eq!(
+            h.encrypt(CryptMethod::Identity, b"x", &entropy).unwrap(),
+            b"x"
         );
     }
 

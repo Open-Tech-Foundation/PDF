@@ -17,13 +17,16 @@ mod limits;
 mod object;
 pub mod parser;
 pub mod serialize;
+mod sink;
 mod source;
 pub mod xref;
 
+pub use crypt::{Entropy, Permissions};
 pub use diag::{Diagnostic, DiagnosticKind, Diagnostics};
 pub use error::{Error, Result};
 pub use file::{File, OpenOptions, SharedSource};
 pub use header::{HEADER_SEARCH_WINDOW, Header, HeaderError, Version, find_header};
 pub use limits::{Budget, LimitKind, Limits, Strictness};
 pub use object::{Dict, Name, ObjId, Object, PdfString, Stream};
+pub use sink::Sink;
 pub use source::{Source, SourceError};

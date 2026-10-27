@@ -7,6 +7,29 @@ versioning: [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Phase 2 saving:
+  - Copy-on-write `Store` under `Document`: edits, additions and deletions
+    shadow the untouched base file (`store_mut`, `set`, `add`, `delete`,
+    `set_trailer_entry`).
+  - `Document::save` / `save_to` with `SaveOptions`: full save (garbage
+    collection, dense deterministic renumbering, Flate compression, object
+    streams, xref stream or classic table, PDF 1.7 or 2.0, a rebuilt page
+    tree when the original needed repair) and incremental save (original
+    bytes kept as an exact prefix, xref format of the last revision kept).
+  - AES-256 (R6) encryption on full save with `Permissions`; incremental
+    updates of AES-256 files are encrypted too. RC4 and AES-128 are never
+    written.
+  - Injected `Entropy` for keys, salts and IVs, and a `Sink` trait for
+    output; the document ID defaults to a content hash, so output is
+    deterministic.
+  - `roundtrip` corpus baseline: every file that opens survives open → full
+    save → open with identical page contents.
+
+### Fixed
+- A wrong password for a file whose catalog is in an encrypted object stream
+  reported "no catalog" instead of "incorrect password".
+- An object marked free by a later revision could be recovered from the
+  older bytes by the repair scan.
 - Phase 1 syntax layer (`otf-pdf-syntax`):
   - Object model (`Object`, `Dict`, `Name`, `PdfString`, `Stream`, `ObjId`)
     with names and strings kept as bytes.

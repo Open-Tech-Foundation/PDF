@@ -138,6 +138,10 @@ impl File {
             }
         }
 
+        // Decryption first: the catalog may sit in an encrypted object
+        // stream, and a wrong password must say so rather than "no catalog".
+        file.init_security(&options.password)?;
+
         // A trailer without a usable catalog: the scan may find one.
         if !file.root_is_usable() {
             if file.strictness == Strictness::Strict {
@@ -148,8 +152,6 @@ impl File {
                 return Err(Error::NoRoot);
             }
         }
-
-        file.init_security(&options.password)?;
         Ok(file)
     }
 
@@ -268,6 +270,45 @@ impl File {
     /// for an incrementally updated file.
     pub fn sections(&self) -> &[u64] {
         &self.sections
+    }
+
+    /// The value written after the last `startxref`, as the file states it:
+    /// what an incremental update's `/Prev` must point to.
+    pub fn startxref(&self) -> Result<Option<u64>> {
+        self.find_startxref()
+    }
+
+    /// Whether the newest xref section is an xref stream (rather than a
+    /// classic table); `None` when no section was read.
+    pub fn newest_section_is_stream(&self) -> Result<Option<bool>> {
+        let Some(&at) = self.sections.first() else {
+            return Ok(None);
+        };
+        let head = self.read(at, 16)?;
+        let start = head.iter().position(|&b| !is_whitespace(b)).unwrap_or(0);
+        Ok(Some(
+            !head.get(start..).is_some_and(|h| h.starts_with(b"xref")),
+        ))
+    }
+
+    /// Whether the xref had to be rebuilt by scanning. Such a file has no
+    /// trustworthy revision chain to append to.
+    pub fn was_rebuilt(&self) -> bool {
+        self.diagnostics
+            .snapshot()
+            .iter()
+            .any(|d| d.kind == DiagnosticKind::XrefRebuilt)
+    }
+
+    /// The whole source, as an incremental save copies it.
+    pub fn read_all(&self) -> Result<Vec<u8>> {
+        let bytes = self.read(0, self.len)?;
+        if (bytes.len() as u64) < self.len {
+            return Err(Error::Source(crate::source::SourceError::new(
+                "source returned fewer bytes than its length",
+            )));
+        }
+        Ok(bytes)
     }
 
     /// The security handler, if the file is encrypted.
@@ -447,6 +488,9 @@ impl File {
             Ok(found) => Ok(found),
             Err(e @ (Error::Limit(_) | Error::Source(_))) => Err(e),
             Err(e) if self.strictness == Strictness::Strict => Err(e),
+            // Explicitly free (deleted in a later revision): the old bytes
+            // still in the file must not resurrect it.
+            Err(e) if entry == Some(XrefEntry::Free) => Err(e),
             Err(e) => {
                 // The xref is wrong or incomplete: look where a scan found it.
                 let scanned = self.scan().entries.get(&id.num).copied();
@@ -1252,6 +1296,20 @@ mod tests {
                 .iter()
                 .any(|d| d.kind == DiagnosticKind::XrefLoop)
         );
+    }
+
+    #[test]
+    fn revision_accessors() {
+        let bytes = build(&[CATALOG, PAGES], "");
+        let f = open(&bytes).unwrap();
+        assert_eq!(f.newest_section_is_stream().unwrap(), Some(false));
+        assert_eq!(f.startxref().unwrap(), Some(f.sections()[0]));
+        assert!(!f.was_rebuilt());
+        assert_eq!(f.read_all().unwrap(), bytes);
+        let scanned =
+            open(b"%PDF-1.4\n1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n").unwrap();
+        assert!(scanned.was_rebuilt());
+        assert_eq!(scanned.newest_section_is_stream().unwrap(), None);
     }
 
     #[test]
