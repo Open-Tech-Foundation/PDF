@@ -9,10 +9,10 @@ facade re-exports what an embedder needs.
 
 The API is synchronous. `Document::open` and every read block until done, so
 call them off the host's event loop, on whatever blocking pool it already
-has. `Document`, `File`, `OpenOptions`, `Limits`, `Error`, `Page`, `Object`,
-`Diagnostic` and `SecurityHandler` are `Send + Sync` (a test enforces it), so
-a document opened on one thread can be read from another, or from several at
-once behind an `Arc`:
+has. `Document`, `File`, `Store`, `OpenOptions`, `SaveOptions`, `Limits`,
+`Error`, `Page`, `Object`, `Diagnostic` and `SecurityHandler` are
+`Send + Sync` (a test enforces it), so a document opened on one thread can be
+read from another, or from several at once behind an `Arc`:
 
 ```rust,no_run
 use std::sync::Arc;
@@ -83,11 +83,29 @@ an error, for validators.
 - `NoXref`, `NoRoot`, `Syntax`: the file is not a readable PDF.
 - `Source`: the host's `Source` failed; its message is passed through.
 
+## Saving
+
+`Document::save_to(&mut sink, &options)` writes through the `Sink` trait
+(implemented for `Vec<u8>`; a host implements it over its own file or
+stream); `Document::save` returns the bytes. Edits (`select_pages`,
+`rotate_page`, `append_pages_from`, `set_info`, `add_attachment`,
+`set_outlines`, or low-level `store_mut()`) go into a copy-on-write overlay,
+so the original bytes are never changed and `SaveMode::Incremental` can
+append just the edits, as signatures need. Incremental saves are refused
+with an error when they would be unsafe (DECISIONS.md D24); fall back to a
+full save.
+
+Encryption needs randomness, which the library never takes from the OS: pass
+an `Entropy` implementation in `SaveOptions::entropy`, backed by the host's
+CSPRNG. Saving without encryption needs none.
+
 ## Determinism
 
-Reading has no randomness and no clock. Writing (Phase 2 onwards) takes
-document IDs, timestamps and entropy from the caller, so output is
-byte-for-byte reproducible.
+There is no randomness and no clock inside the library. The document ID
+defaults to a hash of the content, dates are whatever the caller writes into
+`Info`, and encryption randomness comes from the injected `Entropy`. So the
+same document, edits and options always produce the same bytes, and with a
+deterministic `Entropy` (in tests) so does encryption.
 
 ## Build
 

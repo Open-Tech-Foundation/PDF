@@ -19,10 +19,11 @@ use std::sync::Arc;
 use md5::{Digest, Md5};
 use otf_pdf_syntax::crypt::{CryptMethod, SecurityHandler};
 use otf_pdf_syntax::filters::filter_chain;
-use otf_pdf_syntax::serialize::write_object;
+use otf_pdf_syntax::serialize::{to_bytes, write_object};
+use otf_pdf_syntax::xref::XrefEntry;
 use otf_pdf_syntax::{
-    Dict, Entropy, Error, LimitKind, Name, ObjId, Object, PdfString, Permissions, Result, Sink,
-    Stream, Version,
+    DiagnosticKind, Dict, Entropy, Error, LimitKind, Name, ObjId, Object, PdfString, Permissions,
+    Result, Sink, Stream, Version,
 };
 
 use crate::document::Document;
@@ -294,7 +295,7 @@ impl Document {
                 Object::String(PdfString::hex(id.to_vec())),
             ],
         );
-        write_xref(out, &slots, trailer_out, next, options.object_streams)
+        write_xref(out, &slots, trailer_out, next, options.object_streams, 0)
     }
 
     /// The view a full save writes from. A catalog given directly in the
@@ -357,10 +358,29 @@ impl Document {
                 "encryption cannot change in an incremental save; save in full".into(),
             ));
         }
-        if file.was_rebuilt() {
+        // Appending to a damaged revision chain makes it worse for every
+        // reader: refuse if the xref needed any repair. Wrong entries only
+        // show when objects load, so load them all first (the whole file is
+        // read for the copy anyway).
+        for (&num, entry) in file.entries() {
+            if let XrefEntry::InUse { generation, .. } = *entry {
+                let _ = file.get(ObjId::new(num, generation));
+            }
+        }
+        let damaged = file.diagnostics().iter().any(|d| {
+            matches!(
+                d.kind,
+                DiagnosticKind::XrefRebuilt
+                    | DiagnosticKind::BadXrefEntry
+                    | DiagnosticKind::BadXrefSection
+                    | DiagnosticKind::BadStartxref
+                    | DiagnosticKind::XrefLoop
+            )
+        });
+        if damaged {
             return Err(Error::syntax(
                 0,
-                "the file was repaired, so there is no revision to append to; save in full",
+                "the file's cross-reference data needed repair, so there is no sound revision to append to; save in full",
             ));
         }
         let prev = file
@@ -375,6 +395,9 @@ impl Document {
             ));
         }
         let encrypt_ref = store.trailer().get_ref(b"Encrypt");
+        // Offsets in a file with junk before its header may count from the
+        // header; appended ones must match.
+        let shift = file.offset_shift()?;
 
         let base = file.read_all()?;
         out.sink.write_all(&base)?;
@@ -385,7 +408,10 @@ impl Document {
         // The default ID part is a hash of what this update appends.
         out.hash = Md5::new();
 
+        // Object 0, the head of the free list, keeps every section non-empty
+        // (a section needs at least one subsection, §7.5.4).
         let mut slots: BTreeMap<u32, Slot> = BTreeMap::new();
+        slots.insert(0, Slot::Free(65535));
         for (id, change) in store.overlay() {
             match change {
                 Change::Set(obj) => {
@@ -399,7 +425,7 @@ impl Document {
                         let entropy = options.entropy.as_deref().ok_or_else(needs_entropy)?;
                         encrypt_object(sec, &mut obj, entropy)?;
                     }
-                    slots.insert(id.num, Slot::At(out.pos, id.generation));
+                    slots.insert(id.num, Slot::At(out.pos - shift, id.generation));
                     write_indirect(out, *id, &obj)?;
                 }
                 Change::Deleted => {
@@ -429,18 +455,19 @@ impl Document {
             .unwrap_or(0)
             .max(store.next_number());
         let as_stream = file.newest_section_is_stream()?.unwrap_or(false);
-        write_xref(out, &slots, trailer, size, as_stream)
+        write_xref(out, &slots, trailer, size, as_stream, shift)
     }
 }
 
 /// Object ids reachable from `roots`, in breadth-first order, and their new
 /// numbers. Objects that cannot be read are left out; references to them
-/// become `null`.
+/// become `null`. Identical streams share one number.
 fn reachable(view: &View<'_>, roots: &[ObjId]) -> Result<(Vec<ObjId>, HashMap<ObjId, u32>)> {
     let limits = view.store.limits();
     let mut order = Vec::new();
     let mut numbers = HashMap::new();
     let mut seen = HashSet::new();
+    let mut streams: HashMap<[u8; 16], ObjId> = HashMap::new();
     let mut queue: VecDeque<ObjId> = roots.iter().copied().collect();
     while let Some(id) = queue.pop_front() {
         if !seen.insert(id) {
@@ -448,6 +475,21 @@ fn reachable(view: &View<'_>, roots: &[ObjId]) -> Result<(Vec<ObjId>, HashMap<Ob
         }
         limits.charge(1)?;
         let Ok(obj) = view.get(id) else { continue };
+        // A stream identical to one already kept (a font or image copied in
+        // by two merges) is written once.
+        if let Object::Stream(_) = &*obj {
+            let key: [u8; 16] = Md5::digest(to_bytes(&obj)).into();
+            let same = streams
+                .get(&key)
+                .filter(|&&kept: &&ObjId| view.get(kept).is_ok_and(|k| *k == *obj));
+            if let Some(&kept) = same
+                && let Some(&n) = numbers.get(&kept)
+            {
+                numbers.insert(id, n);
+                continue;
+            }
+            streams.entry(key).or_insert(id);
+        }
         if order.len() >= limits.max_objects as usize {
             return Err(Error::Limit(LimitKind::Objects));
         }
@@ -588,15 +630,17 @@ fn write_indirect(out: &mut Out<'_>, id: ObjId, obj: &Object) -> Result<()> {
 }
 
 /// Writes the xref section (stream or table), trailer, `startxref` and
-/// `%%EOF`. `size` is one past the highest object number.
+/// `%%EOF`. `size` is one past the highest object number; `shift` is
+/// subtracted from the section's own offset (see `File::offset_shift`).
 fn write_xref(
     out: &mut Out<'_>,
     slots: &BTreeMap<u32, Slot>,
     mut trailer: Dict,
     size: u32,
     as_stream: bool,
+    shift: u64,
 ) -> Result<()> {
-    let xref_at = out.pos;
+    let xref_at = out.pos - shift;
     if as_stream {
         let own = size;
         let size = size + 1;

@@ -16,7 +16,7 @@ target="$(rustc +nightly -vV | sed -n 's/^host: //p')"
 root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root/fuzz"
 
-for fuzz_target in header lexer filters document; do
+for fuzz_target in header lexer filters document save; do
     mkdir -p "corpus/$fuzz_target"
     cargo +nightly fuzz run --target "$target" "$fuzz_target" \
         "corpus/$fuzz_target" "$root/corpus/malformed" "$root/corpus/encrypted" \

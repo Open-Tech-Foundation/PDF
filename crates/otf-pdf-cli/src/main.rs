@@ -9,8 +9,11 @@ use std::io::Write;
 use std::path::Path;
 use std::process::ExitCode;
 
+use std::sync::Arc;
+
 use otf_pdf::{
-    Authentication, Document, ObjId, Object, OpenOptions, Rect, Strictness, XrefEntry, to_bytes,
+    Authentication, Document, Encryption, Entropy, ObjId, Object, OpenOptions, Permissions, Rect,
+    SaveMode, SaveOptions, Strictness, Version, XrefEntry, to_bytes,
 };
 
 /// Every input was processed.
@@ -31,12 +34,24 @@ Commands:
   objects <file>              List the cross-reference entries
   dump <file> <num> [gen]     Print an object in PDF syntax
   dump <file> trailer         Print the trailer dictionary
+  save <in> <out>             Rewrite a file (repairs, compacts, decrypts
+                              or re-encrypts)
+  merge <out> <in>...         Concatenate the pages of several files
+  extract <in> <out> <pages>  Keep only <pages>, e.g. 1-3,5,8-
+  delete <in> <out> <pages>   Remove <pages>
+  rotate <in> <out> <pages> <degrees>
+                              Rotate <pages> clockwise by a multiple of 90
   help                        Print this help
 
 Options:
   --password <pw>             Password for an encrypted file
   --strict                    Fail instead of repairing malformed input
   --data                      dump: write a stream's decoded data, raw
+  --incremental               Append changes instead of rewriting
+  --classic-xref              Write a classic xref table, no object streams
+  --pdf-version <1.7|2.0>     Output version of a full save
+  --user-password <pw>        Encrypt the output with AES-256
+  --owner-password <pw>       Owner password when encrypting
   -h, --help                  Print this help
   -V, --version               Print the version
 ";
@@ -53,6 +68,11 @@ struct Options {
     password: Vec<u8>,
     strict: bool,
     data: bool,
+    incremental: bool,
+    classic_xref: bool,
+    pdf_version: Option<Version>,
+    user_password: Option<Vec<u8>>,
+    owner_password: Option<Vec<u8>>,
     positional: Vec<OsString>,
 }
 
@@ -70,6 +90,24 @@ fn parse_options(args: &[OsString]) -> Result<Options, String> {
             }
             Some("--strict") => options.strict = true,
             Some("--data") => options.data = true,
+            Some("--incremental") => options.incremental = true,
+            Some("--classic-xref") => options.classic_xref = true,
+            Some("--pdf-version") => {
+                let v = iter.next().ok_or("--pdf-version needs a value")?;
+                options.pdf_version = Some(match v.to_str() {
+                    Some("1.7") => Version::V1_7,
+                    Some("2.0") => Version::V2_0,
+                    _ => return Err("--pdf-version must be 1.7 or 2.0".into()),
+                });
+            }
+            Some("--user-password") => {
+                let pw = iter.next().ok_or("--user-password needs a value")?;
+                options.user_password = Some(os_bytes(pw));
+            }
+            Some("--owner-password") => {
+                let pw = iter.next().ok_or("--owner-password needs a value")?;
+                options.owner_password = Some(os_bytes(pw));
+            }
             Some(s) if s.starts_with("--") => return Err(format!("unknown option '{s}'")),
             _ => options.positional.push(arg.clone()),
         }
@@ -109,6 +147,20 @@ fn run(args: &[OsString], out: &mut dyn Write, err: &mut dyn Write) -> u8 {
         "info" => with_document(&options, err, &command, |doc| info(doc, out)),
         "pages" => with_document(&options, err, &command, |doc| pages(doc, out)),
         "objects" => with_document(&options, err, &command, |doc| objects(doc, out)),
+        "save" | "extract" | "delete" | "rotate" => {
+            let want = match &*command {
+                "save" => 2,
+                "rotate" => 4,
+                _ => 3,
+            };
+            if options.positional.len() != want {
+                return usage_error(err, &command, "wrong number of arguments");
+            }
+            with_document(&options, err, &command, |doc| {
+                edit_and_save(doc, &command, &options)
+            })
+        }
+        "merge" => merge(&options),
         "dump" => {
             let target = options.positional.get(1..).unwrap_or_default().to_vec();
             if target.is_empty() || target.len() > 2 {
@@ -148,7 +200,7 @@ fn with_document(
     options: &Options,
     err: &mut dyn Write,
     command: &str,
-    f: impl FnOnce(&Document) -> Result<u8, String>,
+    f: impl FnOnce(&mut Document) -> Result<u8, String>,
 ) -> Result<u8, String> {
     let Some(file) = options.positional.first() else {
         return Ok(usage_error(err, command, "expected a file"));
@@ -166,8 +218,160 @@ fn with_document(
         },
         ..OpenOptions::default()
     };
-    let doc = Document::open(bytes, open).map_err(|e| format!("{}: {e}", path.display()))?;
-    f(&doc)
+    let mut doc = Document::open(bytes, open).map_err(|e| format!("{}: {e}", path.display()))?;
+    f(&mut doc)
+}
+
+/// Randomness for encryption: the operating system's, read by the CLI (the
+/// library never reads it itself).
+struct OsEntropy;
+
+impl Entropy for OsEntropy {
+    fn fill(&self, buf: &mut [u8]) {
+        use std::io::Read;
+        let filled = std::fs::File::open("/dev/urandom").and_then(|mut f| f.read_exact(buf));
+        if filled.is_err() {
+            // No /dev/urandom (Windows): fall back to std's per-process
+            // random hash keys, which come from the OS generator.
+            use std::hash::{BuildHasher, Hasher};
+            let state = std::collections::hash_map::RandomState::new();
+            for (i, chunk) in buf.chunks_mut(8).enumerate() {
+                let mut h = state.build_hasher();
+                h.write_usize(i);
+                let bytes = h.finish().to_le_bytes();
+                chunk.copy_from_slice(bytes.get(..chunk.len()).unwrap_or_default());
+            }
+        }
+    }
+}
+
+/// Save options from the command line.
+fn save_options(options: &Options) -> SaveOptions {
+    let encryption =
+        (options.user_password.is_some() || options.owner_password.is_some()).then(|| {
+            let user = options.user_password.clone().unwrap_or_default();
+            Encryption {
+                owner_password: options
+                    .owner_password
+                    .clone()
+                    .unwrap_or_else(|| user.clone()),
+                user_password: user,
+                permissions: Permissions::ALL,
+                encrypt_metadata: true,
+            }
+        });
+    SaveOptions {
+        mode: if options.incremental {
+            SaveMode::Incremental
+        } else {
+            SaveMode::Full
+        },
+        version: options.pdf_version.unwrap_or(Version::V1_7),
+        object_streams: !options.classic_xref,
+        entropy: Some(Arc::new(OsEntropy)),
+        encryption,
+        ..SaveOptions::default()
+    }
+}
+
+/// Parses `1-3,5,8-` (1-based, `N-` to the end) into 0-based indices.
+fn parse_pages(spec: &str, count: usize) -> Result<Vec<usize>, String> {
+    let mut out = Vec::new();
+    for part in spec.split(',').map(str::trim).filter(|p| !p.is_empty()) {
+        let number = |s: &str| -> Result<usize, String> {
+            let n: usize = s
+                .trim()
+                .parse()
+                .map_err(|_| format!("bad page number '{s}'"))?;
+            if n == 0 || n > count {
+                return Err(format!("page {n} out of range 1-{count}"));
+            }
+            Ok(n - 1)
+        };
+        match part.split_once('-') {
+            Some((a, b)) => {
+                let from = if a.trim().is_empty() { 0 } else { number(a)? };
+                let to = if b.trim().is_empty() {
+                    count.saturating_sub(1)
+                } else {
+                    number(b)?
+                };
+                if from > to {
+                    return Err(format!("empty page range '{part}'"));
+                }
+                out.extend(from..=to);
+            }
+            None => out.push(number(part)?),
+        }
+    }
+    if out.is_empty() {
+        return Err("no pages given".into());
+    }
+    Ok(out)
+}
+
+fn write_output(doc: &Document, path: &OsString, options: &Options) -> Result<u8, String> {
+    let bytes = doc
+        .save(&save_options(options))
+        .map_err(|e| e.to_string())?;
+    std::fs::write(path, bytes).map_err(|e| format!("{}: {e}", Path::new(path).display()))?;
+    Ok(EXIT_OK)
+}
+
+fn edit_and_save(doc: &mut Document, command: &str, options: &Options) -> Result<u8, String> {
+    let arg = |i: usize| {
+        options
+            .positional
+            .get(i)
+            .map(|a| a.to_string_lossy().into_owned())
+            .unwrap_or_default()
+    };
+    let count = doc.page_count().map_err(|e| e.to_string())?;
+    match command {
+        "extract" => {
+            let pages = parse_pages(&arg(2), count)?;
+            doc.select_pages(&pages).map_err(|e| e.to_string())?;
+        }
+        "delete" => {
+            let pages = parse_pages(&arg(2), count)?;
+            doc.delete_pages(&pages).map_err(|e| e.to_string())?;
+        }
+        "rotate" => {
+            let pages = parse_pages(&arg(2), count)?;
+            let degrees: i32 = arg(3)
+                .parse()
+                .map_err(|_| "degrees must be a number".to_owned())?;
+            for p in pages {
+                doc.rotate_page(p, degrees).map_err(|e| e.to_string())?;
+            }
+        }
+        _ => {}
+    }
+    let out = options.positional.get(1).ok_or("expected an output file")?;
+    write_output(doc, out, options)
+}
+
+fn merge(options: &Options) -> Result<u8, String> {
+    let [out, inputs @ ..] = options.positional.as_slice() else {
+        return Err("expected <out> <in>...".into());
+    };
+    if inputs.is_empty() {
+        return Err("expected at least one input".into());
+    }
+    let mut merged = Document::new().map_err(|e| e.to_string())?;
+    for input in inputs {
+        let path = Path::new(input);
+        let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
+        let open = OpenOptions {
+            password: options.password.clone(),
+            ..OpenOptions::default()
+        };
+        let doc = Document::open(bytes, open).map_err(|e| format!("{}: {e}", path.display()))?;
+        merged
+            .append_pages_from(&doc, None)
+            .map_err(|e| format!("{}: {e}", path.display()))?;
+    }
+    write_output(&merged, out, options)
 }
 
 fn header(files: &[OsString], out: &mut dyn Write, err: &mut dyn Write) -> u8 {
@@ -449,6 +653,26 @@ mod tests {
         assert_eq!(o.password, b"x y");
         assert!(parse_options(&[OsString::from("--password")]).is_err());
         assert!(parse_options(&[OsString::from("--bogus")]).is_err());
+    }
+
+    #[test]
+    fn page_specs() {
+        assert_eq!(parse_pages("1-3,5", 6).unwrap(), [0, 1, 2, 4]);
+        assert_eq!(parse_pages("4-", 6).unwrap(), [3, 4, 5]);
+        assert_eq!(parse_pages("-2", 6).unwrap(), [0, 1]);
+        assert_eq!(parse_pages(" 2 , 2 ", 6).unwrap(), [1, 1]);
+        for bad in ["0", "7", "3-2", "x", "", ","] {
+            assert!(parse_pages(bad, 6).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn entropy_fills() {
+        let mut a = [0u8; 32];
+        let mut b = [0u8; 32];
+        OsEntropy.fill(&mut a);
+        OsEntropy.fill(&mut b);
+        assert_ne!(a, b);
     }
 
     #[test]

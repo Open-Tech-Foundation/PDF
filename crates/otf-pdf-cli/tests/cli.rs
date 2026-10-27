@@ -1,6 +1,9 @@
 //! End-to-end tests: run the built `otf-pdf` binary against the hand-made
 //! files in `corpus/malformed`, which are committed and always present.
 
+// Helpers here are test code too; clippy only exempts `#[test]` bodies.
+#![allow(clippy::unwrap_used)]
+
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
@@ -263,4 +266,127 @@ fn dump_decrypts_streams() {
         stdout(&output),
         "BT /F1 24 Tf 72 720 Td (Secret r4-aes-128) Tj ET"
     );
+}
+
+fn tmp(name: &str) -> PathBuf {
+    let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join("cli");
+    std::fs::create_dir_all(&dir).unwrap();
+    dir.join(name)
+}
+
+fn page_count(path: &Path, password: &str) -> String {
+    let output = bin()
+        .args(["info", "--password", password])
+        .arg(path)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", stderr(&output));
+    stdout(&output)
+        .lines()
+        .find_map(|l| l.strip_prefix("Pages:").map(|v| v.trim().to_owned()))
+        .unwrap()
+}
+
+#[test]
+fn save_repairs_a_damaged_file() {
+    let out = tmp("repaired.pdf");
+    let output = bin()
+        .arg("save")
+        .arg(malformed("missing-xref.pdf"))
+        .arg(&out)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", stderr(&output));
+    let info = bin().arg("info").arg(&out).output().unwrap();
+    assert!(
+        stdout(&info).contains("Repairs:      0\n"),
+        "{}",
+        stdout(&info)
+    );
+}
+
+#[test]
+fn save_encrypts_and_incremental_appends() {
+    let encrypted = tmp("encrypted.pdf");
+    let output = bin()
+        .args(["save", "--user-password", "u", "--owner-password", "o"])
+        .arg(malformed("minimal-valid.pdf"))
+        .arg(&encrypted)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(page_count(&encrypted, "u"), "1");
+    let info = bin().arg("info").arg(&encrypted).output().unwrap();
+    assert!(stderr(&info).contains("incorrect password"));
+
+    let appended = tmp("appended.pdf");
+    let output = bin()
+        .args(["rotate", "--incremental", "--password", "u"])
+        .arg(&encrypted)
+        .arg(&appended)
+        .args(["1", "90"])
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", stderr(&output));
+    let before = std::fs::read(&encrypted).unwrap();
+    let after = std::fs::read(&appended).unwrap();
+    assert!(after.starts_with(&before));
+    let pages = bin()
+        .args(["pages", "--password", "u"])
+        .arg(&appended)
+        .output()
+        .unwrap();
+    assert!(stdout(&pages).contains("Rotate 90"), "{}", stdout(&pages));
+}
+
+#[test]
+fn merge_extract_delete() {
+    let merged = tmp("merged.pdf");
+    let output = bin()
+        .arg("merge")
+        .arg(&merged)
+        .arg(malformed("minimal-valid.pdf"))
+        .arg(malformed("junk-before-header.pdf"))
+        .arg(malformed("minimal-valid.pdf"))
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(page_count(&merged, ""), "3");
+
+    let extracted = tmp("extracted.pdf");
+    let output = bin()
+        .arg("extract")
+        .arg(&merged)
+        .arg(&extracted)
+        .arg("2-")
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(page_count(&extracted, ""), "2");
+
+    let deleted = tmp("deleted.pdf");
+    let output = bin()
+        .args(["delete", "--pdf-version", "2.0", "--classic-xref"])
+        .arg(&merged)
+        .arg(&deleted)
+        .arg("1,3")
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(page_count(&deleted, ""), "1");
+    assert!(std::fs::read(&deleted).unwrap().starts_with(b"%PDF-2.0"));
+
+    let output = bin()
+        .arg("delete")
+        .arg(&merged)
+        .arg(&deleted)
+        .arg("9")
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(1));
+    assert!(stderr(&output).contains("out of range"));
+    let output = bin().arg("merge").arg(&merged).output().unwrap();
+    assert_eq!(output.status.code(), Some(1));
+    let output = bin().arg("save").arg(&merged).output().unwrap();
+    assert_eq!(output.status.code(), Some(2));
 }

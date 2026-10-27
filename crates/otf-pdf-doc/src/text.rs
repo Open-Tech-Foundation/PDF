@@ -17,6 +17,35 @@ pub fn decode_text_string(bytes: &[u8]) -> String {
     bytes.iter().map(|&b| pdf_doc_char(b)).collect()
 }
 
+/// Encodes a text string: PDFDocEncoding when every character has a byte
+/// there, otherwise UTF-16BE with a byte order mark (works in every version).
+pub fn encode_text_string(text: &str) -> Vec<u8> {
+    let doc: Option<Vec<u8>> = text.chars().map(pdf_doc_byte).collect();
+    match doc {
+        // A PDFDocEncoding string must not start like a byte order mark.
+        Some(bytes)
+            if !bytes.starts_with(&[0xfe, 0xff]) && !bytes.starts_with(&[0xef, 0xbb, 0xbf]) =>
+        {
+            bytes
+        }
+        _ => {
+            let mut out = vec![0xfe, 0xff];
+            for unit in text.encode_utf16() {
+                out.extend_from_slice(&unit.to_be_bytes());
+            }
+            out
+        }
+    }
+}
+
+/// The PDFDocEncoding byte for `c`, if there is one.
+fn pdf_doc_byte(c: char) -> Option<u8> {
+    if c == '\u{fffd}' {
+        return None;
+    }
+    (0u8..=255).find(|&b| pdf_doc_char(b) == c)
+}
+
 fn utf16(bytes: &[u8], unit: fn([u8; 2]) -> u16) -> String {
     let units = bytes.chunks(2).map(|c| {
         unit([
@@ -108,6 +137,27 @@ mod tests {
             0xfe, 0xff, 0x00, 0x1b, 0x00, b'e', 0x00, b'n', 0x00, 0x1b, 0x00, b'H',
         ];
         assert_eq!(decode_text_string(&bytes), "H");
+    }
+
+    #[test]
+    fn encoding_round_trips() {
+        for text in [
+            "Hello",
+            "café €",
+            "Titre Δ",
+            "日本語",
+            "",
+            "þÿ",
+            "\u{1f600}",
+        ] {
+            assert_eq!(
+                decode_text_string(&encode_text_string(text)),
+                text,
+                "{text}"
+            );
+        }
+        assert_eq!(encode_text_string("A€"), vec![b'A', 0xa0]);
+        assert_eq!(&encode_text_string("Δ")[..2], &[0xfe, 0xff]);
     }
 
     #[test]

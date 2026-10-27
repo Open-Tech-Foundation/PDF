@@ -105,3 +105,19 @@ Supersedes D10 and the `runtime:pdf` deliverables in PLAN §5, §6 and §8. This
 - No I/O, clock or randomness of its own: input through `Source`, and later entropy, timestamps and network through injected traits.
 - Every resource bounded by `Limits`, with a `Budget` hook for the host's own work allowance.
 - docs/EMBEDDING.md documents threading, input, limits, diagnostics and errors for host authors.
+
+## D23: XMP is regenerated, not edited
+`Document::set_info` writes the Info dictionary and a fresh XMP packet with the same fields (dc:title, dc:creator, dc:description, pdf:Keywords, pdf:Producer, xmp:CreatorTool, xmp:CreateDate, xmp:ModifyDate; PDF dates converted to ISO 8601). Editing the old packet in place needs an XML parser, which is not on the allowlist. Properties outside that set are dropped, except the PDF/A (`pdfaid:*`) and PDF/UA (`pdfuaid:*`) identification, which is carried over because losing it would silently break a conformance claim. Phase 7 (conformance) needs full XMP handling; revisit this then.
+
+## D24: Save policies
+- **Full save** writes only objects reachable from the trailer's `/Root` and `/Info`, renumbered densely in breadth-first order, so output is deterministic. Byte-identical streams are written once. Unfiltered streams of 32 bytes or more are Flate-compressed, except XMP metadata, which stays readable as PDF/A requires. Non-stream objects go into object streams of 100, indexed by an xref stream; `object_streams: false` writes a classic table instead.
+- A page tree that needed repair (pages recovered by scanning, cycles, broken nodes) is replaced on full save by one flat `/Pages` node, with inherited attributes written into each page. The same flattening is how page edits rewrite the tree.
+- A full save of an encrypted input writes it decrypted unless `encryption` is set, which re-encrypts with AES-256 (R6). Output version 1.7 with AES-256 declares Adobe extension level 8 (D5).
+- **Incremental save** copies the input byte for byte and appends the overlay (changed, added and freed objects) plus a section in the newest section's format (table or stream), with `/Prev` set to the file's own `startxref` value. In a file with junk before the header whose offsets count from the header, appended offsets follow the same convention. It is refused, with an error saying to save in full, when the xref needed any repair, when the input uses RC4 or AES-128 (never written, D4), or when `encryption` asks for a change. Changed objects in an AES-256 file are encrypted with its key.
+- The document ID defaults to an MD5 of the bytes written (for an incremental save, of the appended bytes, as `/ID[1]`), so it changes with the content without a clock or randomness. `document_id` overrides it.
+- Interop: `scripts/check-interop.py` (task `interop`, its own CI job) has every save mode's output read by qpdf and poppler; any qpdf problem or page-count disagreement fails it, apart from damage an incremental save carries over from the original bytes.
+
+## D25: Phase 2 acceptance
+- Round trip: every one of the 3832 external corpus files that opens survives open → full save → open with each page's decoded content bytes identical (`corpus/baseline/roundtrip.txt` lists only the 10 files that do not open). Where an incremental save is made, the original bytes are an exact prefix of the output.
+- Interop: 695 files written by full, classic-xref, AES-256, incremental and merged saves of the committed corpora and a 1-in-25 external sample have no qpdf problems and the right page count in qpdf and poppler.
+- Acrobat was not available for a manual spot check.

@@ -24,12 +24,29 @@ versioning: [SemVer](https://semver.org/).
     deterministic.
   - `roundtrip` corpus baseline: every file that opens survives open → full
     save → open with identical page contents.
+  - Identical streams are written once on a full save.
+- Phase 2 editing: `Document::new`, `select_pages`, `reorder_pages`,
+  `delete_pages` (removing outline items and named destinations that point
+  to deleted pages), `rotate_page`, `set_crop_box`, `set_media_box`,
+  `append_pages_from` (deep copy across documents with reference
+  remapping), `extract_pages`, `set_outlines`, `named_destinations`,
+  `set_info` (Info and a regenerated XMP packet kept in sync),
+  `add_attachment` and `remove_attachment`; `encode_text_string`.
+- CLI commands `save`, `merge`, `extract`, `delete` and `rotate`, with
+  `--incremental`, `--classic-xref`, `--pdf-version`, `--user-password` and
+  `--owner-password`.
+- `scripts/check-interop.py` (task and CI job `interop`): files written in
+  every save mode are checked by qpdf and poppler.
+- `save` fuzz target; `docs/EMBEDDING.md` covers saving; decisions D23–D25.
 
 ### Fixed
 - A wrong password for a file whose catalog is in an encrypted object stream
   reported "no catalog" instead of "incorrect password".
 - An object marked free by a later revision could be recovered from the
   older bytes by the repair scan.
+- An incremental save of an unchanged document wrote an empty classic xref
+  section, and one of a file with junk before its header wrote offsets that
+  did not follow the file's own convention.
 - Phase 1 syntax layer (`otf-pdf-syntax`):
   - Object model (`Object`, `Dict`, `Name`, `PdfString`, `Stream`, `ObjId`)
     with names and strings kept as bytes.

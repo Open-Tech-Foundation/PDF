@@ -52,13 +52,19 @@ run = "./scripts/fetch-corpus.sh"
 [tasks."corpus:test"]
 run = "cargo test --workspace --test corpus"
 
+# Our reader cannot validate our writer: files written by every save mode
+# are checked by qpdf (through pikepdf) and poppler. Needs pikepdf and
+# poppler-utils, and the external corpus for its sample.
+[tasks.interop]
+run = "cargo build --release -p otf-pdf-cli && python3 scripts/check-interop.py"
+
 # A short run per target: a regression gate, not a discovery campaign. Needs
 # cargo-fuzz and nightly.
 [tasks.fuzz]
 run = "./scripts/fuzz.sh"
 
 # What a pull request must pass, needing nothing beyond a Rust toolchain,
-# Python and git. `msrv`, `fuzz` and the external corpus need extra tools or
+# Python and git. `msrv`, `fuzz`, `interop` and the external corpus need extra tools or
 # downloads and run as their own CI jobs.
 [tasks.ci]
 deps = ["fmt", "clippy", "corpus:malformed", "test", "test:doc", "doc"]

@@ -283,9 +283,15 @@ fn incremental_save_refusals() {
         entropy: Some(entropy()),
         ..SaveOptions::default()
     };
-    // A repaired file has no revision chain to append to.
-    let repaired = open_file("malformed", "missing-xref.pdf", "");
-    assert!(repaired.save(&incremental).is_err());
+    // A file whose xref needed repair has no sound chain to append to.
+    for damaged in [
+        "missing-xref.pdf",
+        "wrong-xref-offsets.pdf",
+        "startxref-past-eof.pdf",
+    ] {
+        let doc = open_file("malformed", damaged, "");
+        assert!(doc.save(&incremental).is_err(), "{damaged}");
+    }
     // Legacy encryption is never written.
     let mut rc4 = open_file("encrypted", "r4-rc4-128.pdf", "user");
     rc4.store_mut()
@@ -337,4 +343,34 @@ fn recovered_pages_get_a_fresh_tree() {
     // Inherited attributes were written into the page.
     assert_eq!(pages[0].media_box.ury, 20.0);
     assert_eq!(pages[0].rotate, 90);
+}
+
+#[test]
+fn incremental_save_keeps_header_relative_offsets() {
+    // This file's xref offsets count from its header, 39 bytes in.
+    let original = std::fs::read(corpus("malformed", "junk-before-header.pdf")).unwrap();
+    let mut doc = open_with(original.clone(), "").unwrap();
+    assert_eq!(doc.file().offset_shift().unwrap(), 39);
+    let page = doc.pages().unwrap()[0].id.unwrap();
+    let mut dict = doc.pages().unwrap()[0].dict.clone();
+    dict.insert("Rotate", 90i64);
+    doc.store_mut().set(page, Object::Dict(dict));
+    let saved = doc
+        .save(&SaveOptions {
+            mode: SaveMode::Incremental,
+            ..SaveOptions::default()
+        })
+        .unwrap();
+    assert!(saved.starts_with(&original));
+    let text = String::from_utf8_lossy(&saved);
+    let stated: u64 = text[text.rfind("startxref\n").unwrap() + 10..]
+        .lines()
+        .next()
+        .unwrap()
+        .parse()
+        .unwrap();
+    assert_eq!(&saved[stated as usize + 39..][..4], b"xref");
+    let again = open_with(saved, "").unwrap();
+    assert_eq!(again.pages().unwrap()[0].rotate, 90);
+    assert_eq!(again.file().sections().len(), 2);
 }

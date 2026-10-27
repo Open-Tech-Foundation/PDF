@@ -291,6 +291,21 @@ impl File {
         ))
     }
 
+    /// How far offsets written in this file are shifted from absolute byte
+    /// positions: the header offset when the file has junk before its header
+    /// and its xref offsets count from the header, else 0. New offsets
+    /// appended to the file must follow the same convention.
+    pub fn offset_shift(&self) -> Result<u64> {
+        let (Some(&at), Some(stated)) = (self.sections.first(), self.find_startxref()?) else {
+            return Ok(0);
+        };
+        Ok(if self.base > 0 && at == stated + self.base {
+            self.base
+        } else {
+            0
+        })
+    }
+
     /// Whether the xref had to be rebuilt by scanning. Such a file has no
     /// trustworthy revision chain to append to.
     pub fn was_rebuilt(&self) -> bool {

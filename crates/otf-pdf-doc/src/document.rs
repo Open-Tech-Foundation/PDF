@@ -50,6 +50,9 @@ pub struct OutlineItem {
     pub open: bool,
     /// Child items, in order.
     pub children: Vec<OutlineItem>,
+    /// Other entries of the item (`/C` colour, `/F` style, `/SE`), kept so
+    /// rewriting the outline preserves them.
+    pub extra: Dict,
 }
 
 /// An embedded file from the `/EmbeddedFiles` name tree.
@@ -253,8 +256,23 @@ impl Document {
                 _ => String::new(),
             };
             let children = self.outline_children(&dict, depth + 1, seen, budget)?;
+            let mut extra = dict.clone();
+            for key in [
+                &b"Title"[..],
+                b"Parent",
+                b"Prev",
+                b"Next",
+                b"First",
+                b"Last",
+                b"Count",
+                b"Dest",
+                b"A",
+            ] {
+                extra.remove(key);
+            }
             items.push(OutlineItem {
                 id,
+                extra,
                 title,
                 dest: dict.get(b"Dest").map(|d| self.store.resolve(d)),
                 action: dict.get(b"A").and_then(|a| self.store.resolve_dict(a)),

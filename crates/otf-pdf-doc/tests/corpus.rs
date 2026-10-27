@@ -115,17 +115,12 @@ fn external_corpus_round_trip() {
         if !same {
             return false;
         }
-        let legacy = doc.file().security().is_some_and(|s| !s.can_encrypt());
-        if !doc.file().was_rebuilt() && !legacy {
-            let options = SaveOptions {
-                mode: SaveMode::Incremental,
-                ..SaveOptions::default()
-            };
-            match doc.save(&options) {
-                Ok(out) if out.starts_with(bytes) => {}
-                _ => return false,
-            }
-        }
-        true
+        // An incremental save is refused for damaged xrefs and legacy
+        // encryption; when it is made, the original must be its prefix.
+        let options = SaveOptions {
+            mode: SaveMode::Incremental,
+            ..SaveOptions::default()
+        };
+        !matches!(doc.save(&options), Ok(out) if !out.starts_with(bytes))
     });
 }

@@ -21,14 +21,17 @@
 //! ```
 #![forbid(unsafe_code)]
 
-pub use otf_pdf_doc::{Attachment, Document, Info, OutlineItem, Page, Rect, decode_text_string};
+pub use otf_pdf_doc::{
+    Attachment, AttachmentOptions, Document, Encryption, Info, OutlineItem, Page, Rect, SaveMode,
+    SaveOptions, Store, decode_text_string, encode_text_string,
+};
 pub use otf_pdf_syntax::crypt::{Authentication, CryptMethod, SecurityHandler};
 pub use otf_pdf_syntax::serialize::{to_bytes, write_object};
 pub use otf_pdf_syntax::xref::XrefEntry;
 pub use otf_pdf_syntax::{
-    Budget, Diagnostic, DiagnosticKind, Dict, Error, File, HEADER_SEARCH_WINDOW, Header,
-    HeaderError, LimitKind, Limits, Name, ObjId, Object, OpenOptions, PdfString, Result, Source,
-    SourceError, Stream, Strictness, Version, find_header,
+    Budget, Diagnostic, DiagnosticKind, Dict, Entropy, Error, File, HEADER_SEARCH_WINDOW, Header,
+    HeaderError, LimitKind, Limits, Name, ObjId, Object, OpenOptions, PdfString, Permissions,
+    Result, Sink, Source, SourceError, Stream, Strictness, Version, find_header,
 };
 
 #[cfg(test)]
@@ -50,6 +53,8 @@ mod tests {
         shareable::<Object>();
         shareable::<Diagnostic>();
         shareable::<SecurityHandler>();
+        shareable::<SaveOptions>();
+        shareable::<Store>();
     }
 
     #[test]
