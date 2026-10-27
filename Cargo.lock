@@ -195,6 +195,7 @@ dependencies = [
 name = "otf-pdf"
 version = "0.1.0"
 dependencies = [
+ "otf-pdf-doc",
  "otf-pdf-syntax",
 ]
 
@@ -203,6 +204,13 @@ name = "otf-pdf-cli"
 version = "0.1.0"
 dependencies = [
  "otf-pdf",
+]
+
+[[package]]
+name = "otf-pdf-doc"
+version = "0.1.0"
+dependencies = [
+ "otf-pdf-syntax",
 ]
 
 [[package]]

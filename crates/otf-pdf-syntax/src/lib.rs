@@ -16,6 +16,7 @@ pub mod lexer;
 mod limits;
 mod object;
 pub mod parser;
+pub mod serialize;
 mod source;
 pub mod xref;
 

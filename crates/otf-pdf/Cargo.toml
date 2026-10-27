@@ -13,6 +13,7 @@ keywords = ["pdf"]
 
 [dependencies]
 otf-pdf-syntax.workspace = true
+otf-pdf-doc.workspace = true
 
 [lints]
 workspace = true

@@ -45,7 +45,8 @@ pub enum Error {
 }
 
 impl Error {
-    pub(crate) fn syntax(offset: u64, message: &'static str) -> Self {
+    /// A syntax error at `offset`.
+    pub fn syntax(offset: u64, message: &'static str) -> Self {
         Self::Syntax { offset, message }
     }
 }

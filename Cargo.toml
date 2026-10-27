@@ -11,6 +11,7 @@
 resolver = "3"
 members = [
     "crates/otf-pdf-syntax",
+    "crates/otf-pdf-doc",
     "crates/otf-pdf",
     "crates/otf-pdf-cli",
 ]
@@ -35,6 +36,7 @@ authors = ["Open Tech Foundation <https://opentechf.org> and its contributors"]
 [workspace.dependencies]
 # Internal crates.
 otf-pdf-syntax = { version = "0.1.0", path = "crates/otf-pdf-syntax" }
+otf-pdf-doc = { version = "0.1.0", path = "crates/otf-pdf-doc" }
 otf-pdf = { version = "0.1.0", path = "crates/otf-pdf" }
 
 # Fonts (Fontations). One `read-fonts` is shared with harfrust.

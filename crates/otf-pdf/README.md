@@ -4,14 +4,20 @@ A from-scratch Rust toolkit to parse, edit, sign, verify, generate, validate
 and render PDFs. This is the facade crate: the stable public API of the
 `otf-pdf` workspace.
 
-Status: Phase 0 (foundations). Only file-header detection is available; see
+Status: Phase 1 (reading): open (including encrypted and damaged files),
+enumerate pages, and read metadata, outlines and attachments. See
 [docs/PLAN.md](https://github.com/Open-Tech-Foundation/PDF/blob/main/docs/PLAN.md)
 for the roadmap.
 
-```rust
-let header = otf_pdf::find_header(&b"%PDF-1.7\n"[..])?;
-assert_eq!(header.version, otf_pdf::Version::V1_7);
-# Ok::<(), otf_pdf::HeaderError>(())
+```rust,no_run
+use otf_pdf::{Document, OpenOptions};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let bytes = std::fs::read("file.pdf")?;
+    let doc = Document::open(bytes, OpenOptions::default())?;
+    println!("{} pages, title {:?}", doc.page_count()?, doc.info().title);
+    Ok(())
+}
 ```
 
 Licensed under Apache-2.0.

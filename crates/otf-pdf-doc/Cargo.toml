@@ -1,0 +1,16 @@
+[package]
+name = "otf-pdf-doc"
+description = "Document layer for otf-pdf: page tree, metadata, outlines, attachments; editing and saving from Phase 2."
+readme = "README.md"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+otf-pdf-syntax.workspace = true
+
+[lints]
+workspace = true
