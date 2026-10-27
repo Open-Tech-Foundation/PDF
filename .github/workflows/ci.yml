@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+# Every command lives in tasks.toml and runs as `tsr <task>`. The jobs here
+# only set up what a task needs: toolchains, caches and system tools.
+jobs:
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: ./.github/actions/setup-tsr
+      - run: tsr test
+      - run: tsr test:doc
+
+  lint:
+    name: fmt, clippy and malformed corpus
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - uses: ./.github/actions/setup-tsr
+      - run: tsr fmt
+      - run: tsr clippy
+      - run: tsr corpus:malformed
+
+  docs:
+    name: docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: ./.github/actions/setup-tsr
+      - run: tsr doc
+
+  msrv:
+    name: msrv (1.88)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: ./.github/actions/setup-tsr
+      # The task installs 1.88 itself, so it runs the same way locally.
+      - run: tsr msrv
+
+  corpus:
+    name: external corpus
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # Keyed on the manifest: a pinned commit only changes when it is bumped.
+      - uses: actions/cache@v4
+        with:
+          path: corpus/external
+          key: corpus-${{ hashFiles('corpus/sources.tsv') }}
+      - uses: ./.github/actions/setup-tsr
+      - run: tsr corpus:fetch
+      - run: tsr corpus:test
+
+  fuzz:
+    name: fuzz
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: fuzz
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-fuzz
+      - uses: ./.github/actions/setup-tsr
+      - run: tsr fuzz

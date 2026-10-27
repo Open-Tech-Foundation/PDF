@@ -1,0 +1,7 @@
+# Known header failures in the external corpus. May only shrink.
+# Regenerate: OTF_PDF_UPDATE_BASELINE=1 cargo test --test corpus
+external/pdfbox/pdfbox/src/test/resources/org/apache/pdfbox/pdfparser/PDFBOX-6041-example.pdf
+external/pdfbox/pdfbox/src/test/resources/org/apache/pdfbox/pdmodel/PDFBOX-6040-nodeloop.pdf
+external/pdfjs/test/pdfs/bug1606566.pdf
+external/pdfjs/test/pdfs/issue9105_other.pdf
+external/verapdf/PDF_A-1b/6.1 File structure/6.1.2 File header/veraPDF test suite 6-1-2-t01-fail-b.pdf

@@ -1,0 +1,20 @@
+name: Set up tsr
+description: >
+  Installs the tsr task runner and puts it on PATH. Every workflow here runs
+  repo tasks through `tsr <task>` rather than spelling out cargo, so what CI
+  does and what a contributor does cannot drift.
+inputs:
+  version:
+    description: >
+      Release to install, as a tag such as `v0.7.0`. Defaults to the latest.
+    default: ""
+runs:
+  using: composite
+  steps:
+    - name: install tsr
+      shell: bash
+      env:
+        TSR_VERSION: ${{ inputs.version }}
+      run: |
+        curl -fsSL https://raw.githubusercontent.com/Open-Tech-Foundation/tsr/main/install.sh | bash
+        echo "$HOME/.tsr/bin" >> "$GITHUB_PATH"

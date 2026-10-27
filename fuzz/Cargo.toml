@@ -1,0 +1,24 @@
+[package]
+name = "otf-pdf-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+# Its own workspace: cargo-fuzz builds on nightly with sanitizer flags, which
+# must not leak into the main workspace's build.
+[workspace]
+
+[dependencies]
+# Dev-only fuzzing runtime, never shipped (DECISIONS.md D17).
+libfuzzer-sys = "0.4.13"
+otf-pdf-syntax = { path = "../crates/otf-pdf-syntax" }
+
+[[bin]]
+name = "header"
+path = "fuzz_targets/header.rs"
+test = false
+doc = false
+bench = false

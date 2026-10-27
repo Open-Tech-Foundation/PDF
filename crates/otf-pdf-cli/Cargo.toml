@@ -1,0 +1,22 @@
+[package]
+name = "otf-pdf-cli"
+description = "Development and test CLI for otf-pdf."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+
+[[bin]]
+name = "otf-pdf"
+path = "src/main.rs"
+# Its docs would collide with the `otf-pdf` library's at target/doc/otf_pdf.
+doc = false
+
+[dependencies]
+otf-pdf.workspace = true
+
+[lints]
+workspace = true

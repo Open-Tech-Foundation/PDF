@@ -1,0 +1,18 @@
+[package]
+name = "otf-pdf"
+description = "A from-scratch toolkit to parse, edit, sign, verify, generate, validate and render PDFs."
+readme = "README.md"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+categories = ["parser-implementations", "encoding"]
+keywords = ["pdf"]
+
+[dependencies]
+otf-pdf-syntax.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,64 @@
+# tasks.toml — the workspace root anchor and config for `tsr`.
+# Docs: https://tsr.opentechf.org/docs
+#
+# Every command CI runs is a task here, so what runs on a machine and what runs
+# in a workflow cannot drift. CI installs tsr and calls `tsr <task>`.
+#
+#   tsr --list            what there is
+#   tsr ci                what a pull request must pass
+#   tsr <task> --dry-run  print the command, run nothing
+
+# Warnings are failures. The lint policy lives in the workspace manifest; this
+# makes it binding rather than advisory, locally exactly as in CI.
+[env]
+RUSTFLAGS = "-D warnings"
+
+[tasks.fmt]
+run = "cargo fmt --all --check"
+
+[tasks.clippy]
+run = "cargo clippy --workspace --all-targets"
+
+# Unit, integration and CLI end-to-end tests. Corpus tests run against
+# whatever of the external corpus is fetched, and skip it when none is.
+[tasks.test]
+run = "cargo test --workspace --lib --bins --tests --examples"
+
+[tasks."test:doc"]
+run = "cargo test --workspace --doc"
+
+# `missing_docs = "deny"` fails an undocumented public item; this also catches
+# broken intra-doc links.
+[tasks.doc]
+run = "cargo doc --workspace --no-deps"
+env = { RUSTDOCFLAGS = "-D warnings" }
+
+# The declared `rust-version` is a promise about consuming the library, so it
+# is checked without dev-dependencies.
+[tasks.msrv]
+run = "rustup toolchain install 1.88 --profile minimal && cargo +1.88 check --workspace"
+
+# The committed malformed corpus must match what its generator produces, so a
+# hand edit cannot drift from the script that documents each file.
+[tasks."corpus:malformed"]
+run = "./scripts/check-malformed-corpus.sh"
+
+# Fetch the external corpus at its pinned commits (corpus/sources.tsv).
+[tasks."corpus:fetch"]
+run = "./scripts/fetch-corpus.sh"
+
+# The corpus tests with the external corpus present: what the corpus CI job
+# runs after `corpus:fetch`.
+[tasks."corpus:test"]
+run = "cargo test --workspace --test corpus"
+
+# A short run per target: a regression gate, not a discovery campaign. Needs
+# cargo-fuzz and nightly.
+[tasks.fuzz]
+run = "./scripts/fuzz.sh"
+
+# What a pull request must pass, needing nothing beyond a Rust toolchain,
+# Python and git. `msrv`, `fuzz` and the external corpus need extra tools or
+# downloads and run as their own CI jobs.
+[tasks.ci]
+deps = ["fmt", "clippy", "corpus:malformed", "test", "test:doc", "doc"]

@@ -1,0 +1,86 @@
+# Virtual workspace root for otf-pdf.
+#
+# Layout and dependency direction are fixed by docs/PLAN.md §3:
+#
+#   syntax ← doc ← content ← {font, text, forms, write, render}
+#   sign → doc;  conform → everything it validates;  otf-pdf = facade
+#
+# Each crate joins the workspace in the phase that first needs it (DECISIONS.md
+# D16), so merged code carries no empty stubs.
+[workspace]
+resolver = "3"
+members = [
+    "crates/otf-pdf-syntax",
+    "crates/otf-pdf",
+    "crates/otf-pdf-cli",
+]
+# cargo-fuzz needs its own workspace: it builds with sanitizer flags on nightly.
+exclude = ["fuzz"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+# The highest `rust-version` in the allowlisted set below (sha2 0.11.1), and at
+# or below es-runtime's own MSRV so it can always consume us (DECISIONS.md D15).
+rust-version = "1.88"
+license = "Apache-2.0"
+repository = "https://github.com/Open-Tech-Foundation/PDF"
+authors = ["Open Tech Foundation <https://opentechf.org> and its contributors"]
+
+# The external dependency allowlist (docs/PLAN.md §2, DECISIONS.md D2). Nothing
+# outside this table may be depended on without a DECISIONS.md entry first.
+# Versions are pinned, not floated. Crates es-runtime also uses are pinned to
+# exactly its versions (D3); the rest are pinned to the same generation (D13).
+# Features are chosen by the crate that uses each dependency.
+[workspace.dependencies]
+# Internal crates.
+otf-pdf-syntax = { version = "0.1.0", path = "crates/otf-pdf-syntax" }
+otf-pdf = { version = "0.1.0", path = "crates/otf-pdf" }
+
+# Fonts (Fontations). One `read-fonts` is shared with harfrust.
+skrifa = "0.49.0"
+read-fonts = "0.46.0"
+# Shaping.
+harfrust = "0.15.0"
+
+# Crypto (RustCrypto). Same versions as es-runtime's workspace (D3): the
+# `cipher` 0.4 generation for block/stream ciphers, `digest` 0.11 for hashes,
+# and the `digest` 0.10 / `der` 0.7 generation for the public-key and PKI side.
+aes = "0.8.4"
+cbc = "0.1.2"
+md-5 = "0.11.0"
+sha1 = "0.11.0"
+sha2 = "0.11.0"
+sha3 = "0.11.0"
+rsa = { version = "0.9.10", default-features = false }
+p256 = { version = "0.13.2", default-features = false }
+p384 = { version = "0.13.1", default-features = false }
+p521 = { version = "0.13.3", default-features = false }
+ed25519-dalek = { version = "3.0.0", default-features = false }
+der = "0.7.10"
+spki = "0.7.3"
+pkcs8 = "0.10.2"
+# Not used by es-runtime; pinned to the generation above so no second `cipher`
+# or `der` enters the tree (D13).
+rc4 = "0.1.0"
+x509-cert = "0.2.5"
+cms = "0.2.3"
+
+# Flate: the crate and backend es-runtime's `runtime:archive` uses (flate2 with
+# the pure-Rust miniz_oxide backend).
+flate2 = "1.1.9"
+
+# Images (from Phase 6), from crates.io (D14).
+otf-pixels = "0.5.0"
+
+[workspace.lints.rust]
+missing_docs = "deny"
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+# No panics on any input (docs/PLAN.md §4, DECISIONS.md D11). Tests opt back in
+# locally where an unwrap is the assertion.
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+indexing_slicing = "warn"

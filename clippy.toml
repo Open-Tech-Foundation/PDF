@@ -1,0 +1,6 @@
+# Tests may unwrap, index and panic: there, a panic is the assertion. Library
+# code may not (workspace lints, DECISIONS.md D11).
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true
+allow-indexing-slicing-in-tests = true

@@ -1,0 +1,9 @@
+# External test corpus, fetched by scripts/fetch-corpus.sh into corpus/external/<name>.
+# Every source is pinned to a commit so a fetch is reproducible; bump the commit
+# deliberately, never float it. Paths are sparse-checkout patterns (space-separated,
+# no spaces inside a pattern). Columns are tab-separated.
+#
+# name	repository	commit	paths
+pdfjs	https://github.com/mozilla/pdf.js	ea6cf5c985fbc77c48fffb30adf4167a0de8d005	/test/pdfs/*.pdf
+pdfbox	https://github.com/apache/pdfbox	0f560706df7aaad7ec74a08f814ff39baeb31280	/pdfbox/src/test/resources/**/*.pdf /fontbox/src/test/resources/**/*.pdf /xmpbox/src/test/resources/**/*.pdf
+verapdf	https://github.com/veraPDF/veraPDF-corpus	377728596647e40edf16003d68d620773ce96ec5	/*
