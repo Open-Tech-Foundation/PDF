@@ -374,3 +374,17 @@ fn incremental_save_keeps_header_relative_offsets() {
     assert_eq!(again.pages().unwrap()[0].rotate, 90);
     assert_eq!(again.file().sections().len(), 2);
 }
+
+#[test]
+fn dangling_page_tree_entries_are_not_written() {
+    // Kid 3 does not exist; kid 4 is a real page.
+    let bytes = b"%PDF-1.4\n1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n\
+        2 0 obj << /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >> endobj\n\
+        4 0 obj << /Type /Page /Parent 2 0 R >> endobj\n"
+        .to_vec();
+    let doc = open_with(bytes, "").unwrap();
+    assert_eq!(doc.page_count().unwrap(), 1);
+    let again = open_with(doc.save(&SaveOptions::default()).unwrap(), "").unwrap();
+    assert_eq!(again.page_count().unwrap(), 1);
+    assert!(again.diagnostics().is_empty(), "{:?}", again.diagnostics());
+}

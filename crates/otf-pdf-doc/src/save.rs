@@ -27,7 +27,7 @@ use otf_pdf_syntax::{
 };
 
 use crate::document::Document;
-use crate::pages::standalone_page_dict;
+use crate::pages::{standalone_page_dict, tree_is_sound};
 use crate::store::{Change, Store};
 
 /// How to save.
@@ -319,13 +319,9 @@ impl Document {
         let mut catalog_changed = !matches!(store.trailer().get(b"Root"), Some(Object::Ref(_)));
 
         let pages = self.pages()?;
-        let repaired = self.diagnostics().iter().any(|d| {
-            matches!(
-                d.kind,
-                otf_pdf_syntax::DiagnosticKind::PagesRecovered
-                    | otf_pdf_syntax::DiagnosticKind::BadPageTree
-            )
-        });
+        // Checked directly, not through diagnostics: those are capped and
+        // could miss the repair.
+        let repaired = !tree_is_sound(store, &catalog, &pages);
         if repaired {
             let tree = fresh();
             let mut kids = Vec::with_capacity(pages.len());

@@ -120,7 +120,11 @@ impl<'a, 'd> Parser<'a, 'd> {
                     self.repair(DiagnosticKind::SyntaxError, "unterminated array")?;
                     return Ok(Object::Array(items));
                 }
-                Token::Keyword(_) | Token::DictEnd | Token::BraceOpen | Token::BraceClose => {
+                // Junk, but not the keywords that are objects.
+                Token::Keyword(k) if !matches!(k, b"true" | b"false" | b"null") => {
+                    self.repair(DiagnosticKind::SyntaxError, "unexpected token in array")?;
+                }
+                Token::DictEnd | Token::BraceOpen | Token::BraceClose => {
                     self.repair(DiagnosticKind::SyntaxError, "unexpected token in array")?;
                 }
                 t => items.push(self.object_from(t, depth + 1)?),
@@ -344,6 +348,19 @@ mod tests {
         assert_eq!(d.as_dict().unwrap().get_int(b"B"), Some(3));
         assert!(strict(b"<< /A 1 /B >>").is_err());
         assert!(strict(b"<< 1 /B 3 >>").is_err());
+    }
+
+    #[test]
+    fn keyword_objects_in_arrays() {
+        assert_eq!(
+            strict(b"[true false null 1]"),
+            Ok(Object::Array(vec![
+                Object::Bool(true),
+                Object::Bool(false),
+                Object::Null,
+                Object::Int(1),
+            ]))
+        );
     }
 
     #[test]

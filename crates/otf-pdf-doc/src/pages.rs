@@ -300,6 +300,49 @@ pub fn standalone_page_dict(page: &Page) -> Dict {
     dict
 }
 
+/// Whether the catalog's page tree is sound as written: every node is an
+/// indirect object of the right type, every `/Kids` is an array of
+/// references, no node appears twice, and the leaves are exactly `pages`, in
+/// order. A full save rewrites any tree that is not.
+pub fn tree_is_sound(store: &Store, catalog: &Dict, pages: &[Page]) -> bool {
+    let Some(root) = catalog.get_ref(b"Pages") else {
+        return false;
+    };
+    let mut leaves = Vec::with_capacity(pages.len());
+    let mut seen = HashSet::new();
+    let mut stack = vec![(root, true, 0u32)];
+    while let Some((id, must_be_tree, depth)) = stack.pop() {
+        if depth > store.limits().max_depth || !seen.insert(id) || store.limits().charge(1).is_err()
+        {
+            return false;
+        }
+        let Ok(obj) = store.get(id) else { return false };
+        let Some(dict) = obj.as_dict() else {
+            return false;
+        };
+        if dict.is_type(b"Pages") {
+            let Some(kids) = store
+                .resolve(dict.get(b"Kids").unwrap_or(&Object::Null))
+                .as_array()
+                .map(<[_]>::to_vec)
+            else {
+                return false;
+            };
+            for kid in kids.iter().rev() {
+                let Some(kid) = kid.as_ref() else {
+                    return false;
+                };
+                stack.push((kid, false, depth + 1));
+            }
+        } else if dict.is_type(b"Page") && !must_be_tree {
+            leaves.push(id);
+        } else {
+            return false;
+        }
+    }
+    leaves.len() == pages.len() && leaves.iter().zip(pages).all(|(l, p)| p.id == Some(*l))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

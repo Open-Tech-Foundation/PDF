@@ -44,6 +44,11 @@ versioning: [SemVer](https://semver.org/).
   reported "no catalog" instead of "incorrect password".
 - An object marked free by a later revision could be recovered from the
   older bytes by the repair scan.
+- `true`, `false` and `null` inside arrays were dropped as junk by the
+  parser (found by the `save` fuzz target).
+- A full save could copy a broken page tree (with `null` kids) when the
+  repair diagnostic was lost to the diagnostics cap; the tree is now checked
+  directly.
 - An incremental save of an unchanged document wrote an empty classic xref
   section, and one of a file with junk before its header wrote offsets that
   did not follow the file's own convention.
