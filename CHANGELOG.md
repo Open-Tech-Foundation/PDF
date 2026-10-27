@@ -1,133 +1,21 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
-Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
-versioning: [SemVer](https://semver.org/).
+Repository-level changes: the development CLI (`otf-pdf-cli`, not
+published), CI, test corpus, scripts and docs. Each published crate keeps
+its own `CHANGELOG.md` in its directory.
+Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
 ### Added
-- Phase 3 text extraction:
-  - `otf-pdf-content`: content-stream tokenizer (inline images included),
-    graphics and text state, Form XObjects (cycle- and depth-limited),
-    annotation appearances, marked content, clip tracking, and the `Device`
-    and `Font`/`FontLoader` traits.
-  - `otf-pdf-font`: simple fonts (Type1 with built-in encodings, TrueType,
-    Type3) and Type0/CID fonts; predefined, Differences and built-in
-    encodings; embedded and predefined CMaps; ToUnicode; glyph-name and
-    embedded-cmap fallbacks; standard 14 metrics; Adobe-Japan1, GB1, CNS1
-    and Korea1 CID → Unicode tables.
-  - `otf-pdf-text`: `TextExtractor` with `PageText`, `TextLine`, `Word` and
-    `TextChar` (positions in displayed page space), `/ActualText`, invisible
-    OCR text, clipped text dropped.
-  - CLI `text`; `content` and `text` fuzz targets; Indic and CJK fixtures
-    (`corpus/text`) and a labelled poppler reference subset
-    (`corpus/reference/text`) scored by character error rate; a `text`
-    corpus baseline.
-- Release setup: `release.toml` and release workflow, NOTICE, the root
-  README shipped as the `otf-pdf` crate page, `docs/API.md`, and a
-  README check for published crates.
-- `Document::sanitize` with `SanitizeOptions` and `SanitizeReport`: removes
-  JavaScript, external actions, attachments, XFA, multimedia and optionally
-  links and metadata (D26); CLI `sanitize`.
-- Phase 2 saving:
-  - Copy-on-write `Store` under `Document`: edits, additions and deletions
-    shadow the untouched base file (`store_mut`, `set`, `add`, `delete`,
-    `set_trailer_entry`).
-  - `Document::save` / `save_to` with `SaveOptions`: full save (garbage
-    collection, dense deterministic renumbering, Flate compression, object
-    streams, xref stream or classic table, PDF 1.7 or 2.0, a rebuilt page
-    tree when the original needed repair) and incremental save (original
-    bytes kept as an exact prefix, xref format of the last revision kept).
-  - AES-256 (R6) encryption on full save with `Permissions`; incremental
-    updates of AES-256 files are encrypted too. RC4 and AES-128 are never
-    written.
-  - Injected `Entropy` for keys, salts and IVs, and a `Sink` trait for
-    output; the document ID defaults to a content hash, so output is
-    deterministic.
-  - `roundtrip` corpus baseline: every file that opens survives open → full
-    save → open with identical page contents.
-  - Identical streams are written once on a full save.
-- Phase 2 editing: `Document::new`, `select_pages`, `reorder_pages`,
-  `delete_pages` (removing outline items and named destinations that point
-  to deleted pages), `rotate_page`, `set_crop_box`, `set_media_box`,
-  `append_pages_from` (deep copy across documents with reference
-  remapping), `extract_pages`, `set_outlines`, `named_destinations`,
-  `set_info` (Info and a regenerated XMP packet kept in sync),
-  `add_attachment` and `remove_attachment`; `encode_text_string`.
-- CLI commands `save`, `merge`, `extract`, `delete` and `rotate`, with
-  `--incremental`, `--classic-xref`, `--pdf-version`, `--user-password` and
-  `--owner-password`.
-- `scripts/check-interop.py` (task and CI job `interop`): files written in
-  every save mode are checked by qpdf and poppler.
-- `save` fuzz target; `docs/EMBEDDING.md` covers saving; decisions D23–D25.
-
-### Fixed
-- A wrong password for a file whose catalog is in an encrypted object stream
-  reported "no catalog" instead of "incorrect password".
-- An object marked free by a later revision could be recovered from the
-  older bytes by the repair scan.
-- `true`, `false` and `null` inside arrays were dropped as junk by the
-  parser (found by the `save` fuzz target).
-- A full save could copy a broken page tree (with `null` kids) when the
-  repair diagnostic was lost to the diagnostics cap; the tree is now checked
-  directly.
-- An incremental save of an unchanged document wrote an empty classic xref
-  section, and one of a file with junk before its header wrote offsets that
-  did not follow the file's own convention.
-- Phase 1 syntax layer (`otf-pdf-syntax`):
-  - Object model (`Object`, `Dict`, `Name`, `PdfString`, `Stream`, `ObjId`)
-    with names and strings kept as bytes.
-  - Lenient lexer and object parser, with `Strictness::{Strict, Lenient}`
-    and every repair recorded as a `Diagnostic`.
-  - Configurable `Limits` (nesting depth, object count, decoded size,
-    compression ratio, xref sections, object size, pages) and a CPU
-    `Budget` hook.
-  - Filters: Flate (also raw deflate) with PNG and TIFF predictors, LZW,
-    ASCII85, ASCIIHex, RunLength; DCT, JPX, JBIG2 and CCITT are passed
-    through encoded.
-  - Classic xref tables, xref streams, hybrid files, `/Prev` chains and
-    object streams.
-  - Standard security handler R2–R6 (RC4 40–128, AES-128, AES-256):
-    user and owner passwords, empty passwords opened automatically,
-    Latin-1 retries for R2–R4 and partial SASLprep for R6, and files whose
-    only encrypted data is embedded files.
-  - Repair: xref rebuilt by scanning for objects, trailer or catalog
-    recovered, wrong `/Length` fixed by finding `endstream`, missing
-    `endobj` tolerated, junk before the header handled.
-- `otf-pdf-doc`: read-side `Document` with the page tree (inherited
-  resources, boxes and rotation; cycles cut; lone `/Kids` references and
-  broken trees recovered), PDF version, Info (text strings decoded), XMP,
-  outlines and `/EmbeddedFiles` attachments.
-- Object serializer (`serialize::to_bytes`), used by `otf-pdf dump`.
-- CLI commands `info`, `pages`, `objects` and `dump`, with `--password`,
-  `--strict` and `--data`.
-- Fuzz targets `lexer`, `filters` and `document`.
-- Page-count reference from poppler (`corpus/reference/pages.tsv`) and a
-  `pages` corpus baseline: 3829 of 3842 external files open with every page
-  enumerated.
-- Decision D21 recording Phase 1 acceptance results.
-- `docs/EMBEDDING.md`, an embedding guide for host authors, and a
-  compile-time check that public types are `Send + Sync` (D22, which
-  drops the `runtime:pdf` deliverable).
-- Known-plaintext encryption corpus generated by qpdf (`corpus/encrypted`),
-  known passwords for external corpus files (`corpus/passwords.tsv` and
-  pdf.js's test manifest), and an `open` corpus baseline.
-- Phase 0 foundations: Cargo workspace (edition 2024, MSRV 1.88) with the
-  external dependency allowlist pinned in `[workspace.dependencies]`, and
-  workspace lints that forbid `unsafe` and deny undocumented public items,
-  `unwrap`, `expect` and `panic`.
-- `otf-pdf-syntax`: the injected `Source` trait for random-access input, and
-  `find_header`, which finds the `%PDF-M.m` header in the first 1024 bytes,
-  tolerating leading junk.
-- `otf-pdf` facade re-exporting the public API.
-- `otf-pdf` CLI (`otf-pdf-cli`) with `header`, `help` and `--version`.
-- Test corpus: `scripts/fetch-corpus.sh` fetches pdf.js, PDFBox and veraPDF
-  test files at pinned commits (`corpus/sources.tsv`); Isartor is optional via
-  `ISARTOR_ZIP`. A generated, committed set of hand-made malformed files in
-  `corpus/malformed`; corpus tests with a shrink-only known-failure baseline.
-- Fuzz harness (`fuzz/`) with a `header` target, seeded from the malformed
-  corpus.
-- CI on GitHub Actions running `tsr` tasks: fmt, clippy, tests, docs, MSRV,
-  the malformed-corpus check, external-corpus tests and a short fuzz run.
-- `CHANGELOG.md`, and decisions D13–D18 in `docs/DECISIONS.md`.
+- Workspace, lints, dependency allowlist and decisions log (`docs/`).
+- CLI `otf-pdf`: `header`, `info`, `pages`, `objects`, `dump`, `text`,
+  `save`, `merge`, `extract`, `delete`, `rotate`, `sanitize`.
+- Test corpus: fetch script for pdf.js, PDFBox and veraPDF files at pinned
+  commits; generated malformed, encrypted (qpdf) and Indic/CJK (Chromium,
+  LibreOffice) fixtures; poppler page-count and text references; shrink-only
+  baselines.
+- Fuzz targets: header, lexer, filters, document, save, content, text.
+- CI on GitHub Actions through `tsr` tasks, including qpdf/poppler interop
+  and the external corpus; release configuration.
+- Docs: `API.md`, `EMBEDDING.md`, `DECISIONS.md`.
