@@ -3,48 +3,51 @@ tag_format = "{name}@{version}"
 provider = "github"
 default_branch = "main"
 changelog_strategy = "curated"
-changelog_scope = "root"
+changelog_scope = "package"
 github_release_notes = "curated-changelog"
 
 [hooks]
 
 [publish.ignore_paths]
-otf-pdf-syntax = [
+otf-pdf = [
+    "**/*.md",
     "**/tests/**",
+    "**/benches/**",
 ]
 otf-pdf-doc = [
+    "**/*.md",
     "**/tests/**",
-]
-otf-pdf-content = [
-    "**/tests/**",
+    "**/benches/**",
 ]
 otf-pdf-font = [
+    "**/*.md",
     "**/tests/**",
+    "**/benches/**",
+]
+otf-pdf-content = [
+    "**/*.md",
+    "**/tests/**",
+    "**/benches/**",
 ]
 otf-pdf-text = [
+    "**/*.md",
     "**/tests/**",
+    "**/benches/**",
 ]
-otf-pdf = [
+otf-pdf-syntax = [
+    "**/*.md",
     "**/tests/**",
+    "**/benches/**",
 ]
 
 [[package]]
-name = "otf-pdf-syntax"
+name = "otf-pdf"
 adapter = "crates.io"
 mode = "publish"
 matrix = false
 command = ""
 artifacts = ""
-manifest = "crates/otf-pdf-syntax/Cargo.toml"
-
-[[package]]
-name = "otf-pdf-doc"
-adapter = "crates.io"
-mode = "publish"
-matrix = false
-command = ""
-artifacts = ""
-manifest = "crates/otf-pdf-doc/Cargo.toml"
+manifest = "crates/otf-pdf/Cargo.toml"
 
 [[package]]
 name = "otf-pdf-content"
@@ -56,6 +59,15 @@ artifacts = ""
 manifest = "crates/otf-pdf-content/Cargo.toml"
 
 [[package]]
+name = "otf-pdf-doc"
+adapter = "crates.io"
+mode = "publish"
+matrix = false
+command = ""
+artifacts = ""
+manifest = "crates/otf-pdf-doc/Cargo.toml"
+
+[[package]]
 name = "otf-pdf-font"
 adapter = "crates.io"
 mode = "publish"
@@ -65,6 +77,15 @@ artifacts = ""
 manifest = "crates/otf-pdf-font/Cargo.toml"
 
 [[package]]
+name = "otf-pdf-syntax"
+adapter = "crates.io"
+mode = "publish"
+matrix = false
+command = ""
+artifacts = ""
+manifest = "crates/otf-pdf-syntax/Cargo.toml"
+
+[[package]]
 name = "otf-pdf-text"
 adapter = "crates.io"
 mode = "publish"
@@ -72,12 +93,3 @@ matrix = false
 command = ""
 artifacts = ""
 manifest = "crates/otf-pdf-text/Cargo.toml"
-
-[[package]]
-name = "otf-pdf"
-adapter = "crates.io"
-mode = "publish"
-matrix = false
-command = ""
-artifacts = ""
-manifest = "crates/otf-pdf/Cargo.toml"
