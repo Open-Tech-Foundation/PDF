@@ -1,0 +1,12 @@
+# Known open failures in the external corpus. May only shrink.
+# Regenerate: OTF_PDF_UPDATE_BASELINE=1 cargo test --test corpus
+external/pdfbox/pdfbox/src/test/resources/org/apache/pdfbox/encryption/AES128ExposedMeta.pdf
+external/pdfbox/pdfbox/src/test/resources/org/apache/pdfbox/encryption/AES256ExposedMeta.pdf
+external/pdfbox/pdfbox/src/test/resources/org/apache/pdfbox/encryption/AESkeylength128.pdf
+external/pdfbox/pdfbox/src/test/resources/org/apache/pdfbox/encryption/AESkeylength256.pdf
+external/pdfbox/pdfbox/src/test/resources/org/apache/pdfbox/pdfparser/PDFBOX-6041-example.pdf
+external/pdfjs/test/pdfs/PDFBOX-4352-0.pdf
+external/pdfjs/test/pdfs/REDHAT-1531897-0.pdf
+external/pdfjs/test/pdfs/pr6531_1.pdf
+external/pdfjs/test/pdfs/print_protection.pdf
+external/pdfjs/test/pdfs/saslprep-r6.pdf

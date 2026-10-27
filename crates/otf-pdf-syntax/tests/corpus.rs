@@ -104,9 +104,106 @@ fn key(path: &Path) -> String {
         .join("/")
 }
 
+/// Passwords for encrypted corpus files, by baseline key, from pdf.js's
+/// `test_manifest.json` and `corpus/passwords.tsv`.
+fn passwords() -> std::collections::HashMap<String, String> {
+    let mut out = std::collections::HashMap::new();
+    let listed = fs::read_to_string(corpus().join("passwords.tsv")).unwrap_or_default();
+    for line in listed.lines().filter(|l| !l.starts_with('#')) {
+        if let Some((key, password)) = line.split_once('\t') {
+            out.insert(key.to_owned(), password.to_owned());
+        }
+    }
+    let path = corpus().join("external/pdfjs/test/test_manifest.json");
+    let Ok(json) = fs::read_to_string(path) else {
+        return out;
+    };
+    for object in top_level_objects(&json) {
+        if let (Some(file), Some(password)) =
+            (json_field(object, "file"), json_field(object, "password"))
+        {
+            out.insert(format!("external/pdfjs/test/{file}"), password);
+        }
+    }
+    out
+}
+
+/// The `{...}` objects directly inside the top-level array.
+fn top_level_objects(json: &str) -> Vec<&str> {
+    let mut out = Vec::new();
+    let (mut depth, mut start, mut in_string, mut escaped) = (0, 0, false, false);
+    for (i, c) in json.char_indices() {
+        if in_string {
+            match (escaped, c) {
+                (true, _) => escaped = false,
+                (false, '\\') => escaped = true,
+                (false, '"') => in_string = false,
+                _ => {}
+            }
+            continue;
+        }
+        match c {
+            '"' => in_string = true,
+            '{' => {
+                if depth == 0 {
+                    start = i;
+                }
+                depth += 1;
+            }
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    out.push(&json[start..=i]);
+                }
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+/// The string value of `"key": "..."` in a flat JSON object.
+fn json_field(object: &str, key: &str) -> Option<String> {
+    let at = object.find(&format!("\"{key}\""))? + key.len() + 2;
+    let rest = object[at..]
+        .trim_start()
+        .strip_prefix(':')?
+        .trim_start()
+        .strip_prefix('"')?;
+    let mut out = String::new();
+    let mut chars = rest.chars();
+    let mut pending_high: Option<u32> = None;
+    while let Some(c) = chars.next() {
+        match c {
+            '"' => return Some(out),
+            '\\' => match chars.next()? {
+                'u' => {
+                    let hex: String = chars.by_ref().take(4).collect();
+                    let unit = u32::from_str_radix(&hex, 16).ok()?;
+                    if (0xd800..0xdc00).contains(&unit) {
+                        pending_high = Some(unit);
+                        continue;
+                    }
+                    let code = match pending_high.take() {
+                        Some(high) => 0x10000 + ((high - 0xd800) << 10) + (unit - 0xdc00),
+                        None => unit,
+                    };
+                    out.push(char::from_u32(code)?);
+                }
+                'n' => out.push('\n'),
+                't' => out.push('\t'),
+                other => out.push(other),
+            },
+            other => out.push(other),
+        }
+    }
+    None
+}
+
 /// Runs `check` over every fetched external file and compares the failures
-/// with `corpus/baseline/<name>.txt`.
-fn against_baseline(name: &str, check: impl Fn(&[u8]) -> bool) {
+/// with `corpus/baseline/<name>.txt`. `check` gets the file's baseline key
+/// and its bytes.
+fn against_baseline(name: &str, check: impl Fn(&str, &[u8]) -> bool) {
     let external = corpus().join("external");
     let sources: Vec<PathBuf> = fs::read_dir(&external)
         .map(|entries| entries.flatten().map(|e| e.path()).collect())
@@ -123,8 +220,9 @@ fn against_baseline(name: &str, check: impl Fn(&[u8]) -> bool) {
         for file in pdfs(source) {
             total += 1;
             let bytes = fs::read(&file).unwrap();
-            if !check(&bytes) {
-                failures.insert(key(&file));
+            let file_key = key(&file);
+            if !check(&file_key, &bytes) {
+                failures.insert(file_key);
             }
         }
     }
@@ -169,5 +267,68 @@ fn against_baseline(name: &str, check: impl Fn(&[u8]) -> bool) {
 
 #[test]
 fn external_corpus_headers() {
-    against_baseline("header", |bytes| find_header(bytes).is_ok());
+    against_baseline("header", |_, bytes| find_header(bytes).is_ok());
+}
+
+#[test]
+fn malformed_set_opens_or_fails_cleanly() {
+    use otf_pdf_syntax::{File, OpenOptions};
+    use std::sync::Arc;
+    for entry in fs::read_dir(corpus().join("malformed")).unwrap() {
+        let path = entry.unwrap().path();
+        if path.extension().is_none_or(|e| e != "pdf") {
+            continue;
+        }
+        let bytes = fs::read(&path).unwrap();
+        // Either outcome is fine; panicking or hanging is not.
+        if let Ok(f) = File::open(Arc::new(bytes), OpenOptions::default()) {
+            for &num in f.entries().keys() {
+                let _ = f.get(otf_pdf_syntax::ObjId::new(num, 0));
+            }
+        }
+    }
+}
+
+#[test]
+fn external_corpus_opens() {
+    use otf_pdf_syntax::{File, OpenOptions};
+    use std::sync::Arc;
+    let passwords = passwords();
+    assert!(
+        passwords.is_empty() || passwords.len() >= 5,
+        "pdf.js manifest passwords not found"
+    );
+    against_baseline("open", |key, bytes| {
+        let options = OpenOptions {
+            password: passwords
+                .get(key)
+                .map(|p| p.as_bytes().to_vec())
+                .unwrap_or_default(),
+            ..OpenOptions::default()
+        };
+        File::open(Arc::new(bytes.to_vec()), options).is_ok_and(|f| {
+            f.resolve_dict(
+                f.trailer()
+                    .get(b"Root")
+                    .unwrap_or(&otf_pdf_syntax::Object::Null),
+            )
+            .is_some()
+        })
+    });
+}
+
+#[test]
+fn manifest_json_reader() {
+    let json = r#"[{"id": "a", "file": "pdfs/a.pdf", "password": "pæ😀\"q"}, {"file": "pdfs/b.pdf", "x": {"y": "}"}}]"#;
+    let objects = top_level_objects(json);
+    assert_eq!(objects.len(), 2);
+    assert_eq!(
+        json_field(objects[0], "file").as_deref(),
+        Some("pdfs/a.pdf")
+    );
+    assert_eq!(
+        json_field(objects[0], "password").as_deref(),
+        Some("pæ😀\"q")
+    );
+    assert_eq!(json_field(objects[1], "password"), None);
 }

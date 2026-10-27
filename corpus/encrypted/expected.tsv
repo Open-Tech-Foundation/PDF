@@ -1,0 +1,12 @@
+# file	user password	owner password	page text	title
+r2-rc4-40.pdf	user	owner	Secret r2-rc4-40	Title r2-rc4-40
+r3-rc4-128.pdf	user	owner	Secret r3-rc4-128	Title r3-rc4-128
+r3-rc4-128-empty-user.pdf		owner	Secret r3-rc4-128-empty-user	Title r3-rc4-128-empty-user
+r4-rc4-128.pdf	user	owner	Secret r4-rc4-128	Title r4-rc4-128
+r4-aes-128.pdf	user	owner	Secret r4-aes-128	Title r4-aes-128
+r4-aes-128-clear-metadata.pdf	user	owner	Secret r4-aes-128-clear-metadata	Title r4-aes-128-clear-metadata
+r5-aes-256.pdf	user	owner	Secret r5-aes-256	Title r5-aes-256
+r6-aes-256.pdf	user	owner	Secret r6-aes-256	Title r6-aes-256
+r6-aes-256-empty-user.pdf		owner	Secret r6-aes-256-empty-user	Title r6-aes-256-empty-user
+r6-aes-256-unicode.pdf	pässwörd	owner	Secret r6-aes-256-unicode	Title r6-aes-256-unicode
+r6-aes-256-object-streams.pdf	user	owner	Secret r6-aes-256-object-streams	Title r6-aes-256-object-streams

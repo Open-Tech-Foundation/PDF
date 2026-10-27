@@ -34,7 +34,9 @@ while IFS=$'\t' read -r name repo commit paths; do
     [[ -z "$name" || "$name" == \#* ]] && continue
     want "$name" || continue
     dir="$dest/$name"
-    if [[ -f "$dir/.otf-pdf-commit" && "$(cat "$dir/.otf-pdf-commit")" == "$commit" ]]; then
+    # The marker records commit and paths, so changing either refetches.
+    marker="$commit $paths"
+    if [[ -f "$dir/.otf-pdf-commit" && "$(cat "$dir/.otf-pdf-commit")" == "$marker" ]]; then
         echo "$name: already at ${commit:0:12}"
         fetched=$((fetched + 1))
         continue
@@ -46,7 +48,7 @@ while IFS=$'\t' read -r name repo commit paths; do
     git -C "$dir" sparse-checkout set --no-cone $paths
     git -C "$dir" fetch -q --depth 1 --filter=blob:none origin "$commit"
     git -C "$dir" -c advice.detachedHead=false checkout -q FETCH_HEAD
-    echo "$commit" > "$dir/.otf-pdf-commit"
+    echo "$marker" > "$dir/.otf-pdf-commit"
     count="$(find "$dir" -path "$dir/.git" -prune -o -type f -iname '*.pdf' -print | wc -l)"
     echo "$name: $count PDF files"
     if [[ "$count" -eq 0 ]]; then
