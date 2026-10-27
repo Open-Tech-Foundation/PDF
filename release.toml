@@ -3,7 +3,7 @@ tag_format = "{name}@{version}"
 provider = "github"
 default_branch = "main"
 changelog_strategy = "curated"
-changelog_scope = "package"
+changelog_scope = "root"
 github_release_notes = "curated-changelog"
 
 [hooks]
