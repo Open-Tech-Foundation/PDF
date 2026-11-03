@@ -11,6 +11,7 @@ mod device;
 mod interp;
 mod matrix;
 mod ops;
+mod sanitize;
 mod write;
 
 pub use device::{
@@ -19,4 +20,5 @@ pub use device::{
 pub use interp::{page_content, run_page};
 pub use matrix::Matrix;
 pub use ops::{Operation, parse_content};
+pub use sanitize::sanitize;
 pub use write::{write_content, write_operation};

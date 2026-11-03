@@ -77,7 +77,8 @@ All edits go into a copy-on-write overlay; the original bytes are untouched.
 | `set_outlines(&[OutlineItem])` | Replace the bookmark tree |
 | `set_info(&Info)` | Write Info and a matching XMP packet |
 | `add_attachment(name, data, &AttachmentOptions)`, `remove_attachment(name)` | Embedded files |
-| `sanitize(&SanitizeOptions)` → `SanitizeReport` | Remove scripts, risky actions, attachments, XFA, multimedia, and per option comments, hidden annotations, metadata, thumbnails, links, navigation, Web Capture data and tagging; profiles `BASIC`, `PRIVACY`, `STRICT`; save in full afterwards |
+| `otf_pdf::sanitize(&mut doc, &SanitizeOptions)` → `SanitizeReport` | Every category: scripts, risky actions, attachments, XFA, multimedia, and per option comments, hidden annotations, metadata, thumbnails, links, navigation, Web Capture data, tagging, hidden layers and invisible text; profiles `BASIC`, `PRIVACY`, `STRICT`; save in full afterwards |
+| `doc.sanitize(&SanitizeOptions)` | The document-level categories only; refuses `hidden_layers` and `invisible_text` (see `without_content()`) |
 | `store_mut()` → `Store` | Low level: `get`, `set`, `add`, `delete`, `set_trailer_entry` |
 
 ## Save

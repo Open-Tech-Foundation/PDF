@@ -124,7 +124,9 @@ fn default_removes_active_content_and_keeps_links_and_metadata() {
 #[test]
 fn all_removes_links_and_metadata_too() {
     let mut doc = open(risky());
-    let report = doc.sanitize(&SanitizeOptions::ALL).unwrap();
+    let report = doc
+        .sanitize(&SanitizeOptions::ALL.without_content())
+        .unwrap();
     assert_eq!(report.links, 1);
     assert_eq!(report.metadata, 3, "{report:?}");
     let clean = open(doc.save(&SaveOptions::default()).unwrap());
@@ -148,7 +150,11 @@ fn clean_documents_report_nothing() {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../corpus/malformed/minimal-valid.pdf");
     let mut doc = open(std::fs::read(path).unwrap());
-    assert!(doc.sanitize(&SanitizeOptions::ALL).unwrap().is_empty());
+    assert!(
+        doc.sanitize(&SanitizeOptions::ALL.without_content())
+            .unwrap()
+            .is_empty()
+    );
     assert!(!doc.store().is_modified());
     let _ = Object::Null;
 }
@@ -286,7 +292,7 @@ fn basic_removes_comments_and_hidden_annotations_but_keeps_widgets() {
 
 #[test]
 fn privacy_also_removes_thumbnails_and_web_capture() {
-    let (report, clean, _) = sanitized(SanitizeOptions::PRIVACY);
+    let (report, clean, _) = sanitized(SanitizeOptions::PRIVACY.without_content());
     assert_eq!(report.thumbnails, 1);
     // /SpiderInfo, /IDS, /URLS and the page's content-set /ID.
     assert_eq!(report.web_capture, 4, "{report:?}");
@@ -304,7 +310,7 @@ fn privacy_also_removes_thumbnails_and_web_capture() {
 
 #[test]
 fn strict_removes_navigation_and_structure_too() {
-    let (report, clean, _) = sanitized(SanitizeOptions::STRICT);
+    let (report, clean, _) = sanitized(SanitizeOptions::STRICT.without_content());
     // /Outlines, /Dests, /Threads, /PageLabels, the /Dests tree, the bead.
     assert_eq!(report.navigation, 6, "{report:?}");
     // /StructTreeRoot, /MarkInfo, the page's /StructParents and the
@@ -337,7 +343,6 @@ fn strict_removes_navigation_and_structure_too() {
         .get_array(b"Fields")
         .unwrap();
     assert_eq!(fields.len(), 1);
-    assert_eq!(SanitizeOptions::ALL, SanitizeOptions::STRICT);
 }
 
 #[test]

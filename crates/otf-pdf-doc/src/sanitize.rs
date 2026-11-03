@@ -1,12 +1,16 @@
 //! Sanitizing: removing active and hidden content (JavaScript, risky
 //! actions, attachments, XFA, multimedia, metadata).
 //!
-//! Every object is visited once and cleaned in the overlay. The removed
+//! Every object is visited once and cleaned in the overlay. The two
+//! categories that rewrite page content ([`SanitizeOptions::hidden_layers`]
+//! and [`SanitizeOptions::invisible_text`]) need the content parser and
+//! fonts, which sit above this crate: `otf_pdf::sanitize` runs them and
+//! then this pass, and [`Document::sanitize`] refuses them. The removed
 //! objects become unreachable, so a **full** save drops them from the file;
 //! an incremental save would leave the old bytes in place and must not be
 //! used after sanitizing (DECISIONS.md D26).
 
-use otf_pdf_syntax::{Dict, ObjId, Object, Result};
+use otf_pdf_syntax::{Dict, Error, ObjId, Object, Result};
 
 use crate::document::Document;
 use crate::store::Store;
@@ -78,6 +82,18 @@ pub struct SanitizeOptions {
     /// text and tag names. The document is no longer tagged, so it loses
     /// its accessibility.
     pub structure: bool,
+    /// Optional content (layers) hidden in the default view: content in
+    /// layers that are off is cut from page content, Form XObjects and
+    /// annotation appearances, hidden XObjects and annotations go (form
+    /// widgets are kept), and the layer list (`/OCProperties`) is dropped,
+    /// so the visible layers become ordinary content. Rewrites content, so
+    /// only `otf_pdf::sanitize` applies it.
+    pub hidden_layers: bool,
+    /// Invisible text (rendering mode 3), such as the OCR layer of a scan:
+    /// removed from content, with the text position kept so visible text
+    /// does not move. The document is no longer searchable where that text
+    /// was. Rewrites content, so only `otf_pdf::sanitize` applies it.
+    pub invisible_text: bool,
 }
 
 impl Default for SanitizeOptions {
@@ -96,6 +112,8 @@ impl Default for SanitizeOptions {
             navigation: false,
             web_capture: false,
             structure: false,
+            hidden_layers: false,
+            invisible_text: false,
         }
     }
 }
@@ -116,6 +134,8 @@ impl SanitizeOptions {
         navigation: false,
         web_capture: false,
         structure: false,
+        hidden_layers: false,
+        invisible_text: false,
     };
 
     /// Basic cleanup, for ordinary sharing: everything that can run or
@@ -135,11 +155,13 @@ impl SanitizeOptions {
 
     /// Privacy cleanup, for confidential documents: [`BASIC`](Self::BASIC)
     /// plus the places where hidden copies of content or its history live
-    /// (thumbnails, Web Capture data). Earlier revisions go with the full
-    /// save that must follow. Invisible text (OCR layers) is kept.
+    /// (thumbnails, Web Capture data, hidden layers). Earlier revisions go
+    /// with the full save that must follow. Invisible text (OCR layers) is
+    /// kept.
     pub const PRIVACY: SanitizeOptions = SanitizeOptions {
         thumbnails: true,
         web_capture: true,
+        hidden_layers: true,
         ..Self::BASIC
     };
 
@@ -153,9 +175,28 @@ impl SanitizeOptions {
         ..Self::PRIVACY
     };
 
-    /// Every category, including those a profile keeps on purpose as they
-    /// are added.
-    pub const ALL: SanitizeOptions = Self::STRICT;
+    /// Every category, including invisible text, which every profile keeps
+    /// so scans stay searchable.
+    pub const ALL: SanitizeOptions = SanitizeOptions {
+        invisible_text: true,
+        ..Self::STRICT
+    };
+
+    /// These options without the categories that rewrite page content
+    /// (`hidden_layers`, `invisible_text`): what [`Document::sanitize`]
+    /// accepts.
+    pub const fn without_content(self) -> Self {
+        Self {
+            hidden_layers: false,
+            invisible_text: false,
+            ..self
+        }
+    }
+
+    /// Whether a category that rewrites page content is on.
+    pub const fn rewrites_content(&self) -> bool {
+        self.hidden_layers || self.invisible_text
+    }
 }
 
 /// How many items of each kind were removed.
@@ -188,6 +229,11 @@ pub struct SanitizeReport {
     pub web_capture: usize,
     /// Structure trees, `/MarkInfo` and `/StructParent(s)` entries.
     pub structure: usize,
+    /// Hidden-layer content: marked sections cut, XObject uses and
+    /// annotations removed, and the layer list.
+    pub hidden_layers: usize,
+    /// Text-showing operations of invisible text.
+    pub invisible_text: usize,
 }
 
 impl SanitizeReport {
@@ -412,7 +458,17 @@ impl Document {
     /// Removes the content selected by `options` and reports what went.
     /// Save in full afterwards: only a full save drops the removed objects
     /// from the file.
+    ///
+    /// The categories that rewrite page content are refused with
+    /// [`Error::WrongType`] rather than skipped: use `otf_pdf::sanitize`,
+    /// which applies every category, or [`SanitizeOptions::without_content`].
     pub fn sanitize(&mut self, options: &SanitizeOptions) -> Result<SanitizeReport> {
+        if options.rewrites_content() {
+            return Err(Error::WrongType {
+                expected: "document-level sanitize options",
+                found: "hidden_layers or invisible_text, which only otf_pdf::sanitize applies",
+            });
+        }
         let ids: Vec<ObjId> = self.store().object_ids();
         let mut changes = Vec::new();
         let mut cleaner = Cleaner {
@@ -557,6 +613,8 @@ mod tests {
                 o.navigation,
                 o.web_capture,
                 o.structure,
+                o.hidden_layers,
+                o.invisible_text,
             ]
         };
         let none = on(SanitizeOptions::NONE);
@@ -578,6 +636,47 @@ mod tests {
         let b = SanitizeOptions::BASIC;
         assert!(b.comments && b.metadata && !b.links && !b.navigation);
         let p = SanitizeOptions::PRIVACY;
-        assert!(p.thumbnails && p.web_capture && !p.structure);
+        assert!(p.thumbnails && p.web_capture && p.hidden_layers && !p.structure);
+        // OCR text is kept by every profile; only ALL removes it.
+        for profile in [
+            SanitizeOptions::BASIC,
+            SanitizeOptions::PRIVACY,
+            SanitizeOptions::STRICT,
+        ] {
+            assert!(!profile.invisible_text);
+        }
+        const { assert!(SanitizeOptions::ALL.invisible_text) };
+    }
+
+    #[test]
+    fn content_categories_are_split_off() {
+        let all = SanitizeOptions::ALL;
+        assert!(all.rewrites_content());
+        let doc_level = all.without_content();
+        assert!(!doc_level.rewrites_content());
+        assert!(doc_level.links && doc_level.structure);
+        assert!(!SanitizeOptions::BASIC.rewrites_content());
+    }
+
+    #[test]
+    fn document_sanitize_refuses_content_categories() {
+        let mut doc = Document::new().unwrap();
+        for options in [
+            SanitizeOptions::PRIVACY,
+            SanitizeOptions {
+                invisible_text: true,
+                ..SanitizeOptions::NONE
+            },
+        ] {
+            assert!(matches!(
+                doc.sanitize(&options),
+                Err(Error::WrongType { .. })
+            ));
+        }
+        assert!(!doc.store().is_modified());
+        assert!(
+            doc.sanitize(&SanitizeOptions::PRIVACY.without_content())
+                .is_ok()
+        );
     }
 }

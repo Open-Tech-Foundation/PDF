@@ -51,6 +51,26 @@ pub use otf_pdf_syntax::{
     Result, Sink, Source, SourceError, Stream, Strictness, Version, find_header,
 };
 
+/// Sanitizes `doc` by every category in `options`, including the two that
+/// rewrite page content (hidden layers and invisible text), and reports
+/// what was removed. [`Document::sanitize`] does the document-level
+/// categories alone and refuses the content ones. Save in full afterwards.
+///
+/// ```
+/// # let bytes = b"%PDF-1.7\n1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n\
+/// #   2 0 obj << /Type /Pages /Kids [] /Count 0 >> endobj\n".to_vec();
+/// use otf_pdf::{Document, OpenOptions, SanitizeOptions, SaveOptions};
+///
+/// let mut doc = Document::open(bytes, OpenOptions::default())?;
+/// let report = otf_pdf::sanitize(&mut doc, &SanitizeOptions::PRIVACY)?;
+/// let clean = doc.save(&SaveOptions::default())?;
+/// # assert!(report.is_empty());
+/// # Ok::<(), otf_pdf::Error>(())
+/// ```
+pub fn sanitize(doc: &mut Document, options: &SanitizeOptions) -> Result<SanitizeReport> {
+    otf_pdf_content::sanitize(doc, options, &FontCache::new())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

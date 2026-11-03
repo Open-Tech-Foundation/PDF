@@ -53,9 +53,10 @@ Options:
   --data                      dump: write a stream's decoded data, raw
   --profile <name>            sanitize: basic (also metadata, comments, hidden
                               annotations), privacy (also thumbnails, Web
-                              Capture data) or strict (also links, navigation,
-                              tagging)
-  --all                       sanitize: remove every category
+                              Capture data, hidden layers) or strict (also
+                              links, navigation, tagging)
+  --all                       sanitize: remove every category, invisible
+                              (OCR) text included
   --incremental               Append changes instead of rewriting
   --classic-xref              Write a classic xref table, no object streams
   --pdf-version <1.7|2.0>     Output version of a full save
@@ -359,7 +360,7 @@ fn edit_and_save(doc: &mut Document, command: &str, options: &Options) -> Result
                 (false, Some(profile)) => profile,
                 (false, None) => SanitizeOptions::default(),
             };
-            let report = doc.sanitize(&sanitize).map_err(|e| e.to_string())?;
+            let report = otf_pdf::sanitize(doc, &sanitize).map_err(|e| e.to_string())?;
             // Only a full save drops what was removed (DECISIONS D26).
             if options.incremental {
                 return Err("sanitize needs a full save; drop --incremental".into());

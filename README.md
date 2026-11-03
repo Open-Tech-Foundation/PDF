@@ -44,7 +44,7 @@ std::fs::write("out.pdf", doc.save(&SaveOptions::default())?)?;
 | ✏️ **Edit** | Merge, split, extract, reorder, delete, rotate and crop pages; outlines, named destinations, metadata (Info and XMP kept in sync), attachments |
 | 💾 **Save** | Full save (garbage-collected, compressed, object streams) or incremental save (original bytes kept as a prefix); deterministic output |
 | 🔒 **Encrypt** | AES-256 (R6) with permissions; legacy RC4/AES-128 are read, never written |
-| 🧹 **Sanitize** | Remove JavaScript, launch/submit actions, attachments, XFA and multimedia, and optionally comments, hidden annotations, metadata, thumbnails, links and more; basic, privacy and strict profiles |
+| 🧹 **Sanitize** | Remove JavaScript, launch/submit actions, attachments, XFA and multimedia, and optionally comments, hidden annotations, metadata, thumbnails, hidden layers, invisible text, links and more; basic, privacy and strict profiles |
 | 🔤 **Extract text** | Lines and words with positions; Type1, TrueType, Type3 and CID fonts, ToUnicode, CMaps, Adobe CJK collections; form field text |
 
 Not yet: creating PDFs from scratch, rendering, forms filling, signatures,

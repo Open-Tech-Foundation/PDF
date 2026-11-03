@@ -1,0 +1,2 @@
+# Known sanitize failures in the external corpus. May only shrink.
+# Regenerate: OTF_PDF_UPDATE_BASELINE=1 cargo test --test corpus

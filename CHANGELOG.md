@@ -28,6 +28,14 @@ versioning: [SemVer](https://semver.org/).
   data could be mistaken for `EI` (D31).
 - **otf-pdf-doc:** `Document::set_page_content` replaces a page's content.
 - **otf-pdf:** `content::write_content` and `content::write_operation`.
+- **otf-pdf-doc:** Sanitize categories `hidden_layers` and `invisible_text`,
+  with `SanitizeOptions::without_content` and `rewrites_content`;
+  `PRIVACY` and `STRICT` include hidden layers, and only `ALL` removes
+  invisible (OCR) text (D32).
+- **otf-pdf-content:** `sanitize`, which cuts hidden optional content and
+  invisible text from page content, Form XObjects and appearances without
+  moving the visible text, then runs the document-level pass.
+- **otf-pdf:** `otf_pdf::sanitize`, the full sanitizer.
 - Decision D29: es-runtime builds `runtime:pdf` on the published facade
   in its own repository, amending D22.
 - **otf-pdf-syntax:** Object model (`Object`, `Dict`, `Name`, `PdfString`, `Stream`, `ObjId`)
@@ -85,6 +93,11 @@ versioning: [SemVer](https://semver.org/).
 - **otf-pdf-doc:** `SanitizeOptions` and `SanitizeReport` gain fields, so
   struct literals must name them or use `..` from a profile or `NONE`.
   `SanitizeOptions::ALL` now also covers the new categories.
+- **otf-pdf-doc:** `Document::sanitize` refuses `hidden_layers` and
+  `invisible_text` with `Error::WrongType`; use `otf_pdf::sanitize`.
+- **otf-pdf-cli:** `sanitize` runs the full sanitizer, so `--profile
+  privacy|strict` and `--all` also cut hidden layers (and `--all` invisible
+  text).
 
 ### Fixed
 - **otf-pdf-content:** A page content stream, Form XObject or annotation
