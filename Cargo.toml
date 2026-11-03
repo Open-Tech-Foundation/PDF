@@ -22,7 +22,7 @@ members = [
 exclude = ["fuzz"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 # The highest `rust-version` in the allowlisted set below (sha2 0.11.1), and at
 # or below es-runtime's own MSRV so it can always consume us (DECISIONS.md D15).
@@ -38,12 +38,12 @@ authors = ["Open Tech Foundation <https://opentechf.org> and its contributors"]
 # Features are chosen by the crate that uses each dependency.
 [workspace.dependencies]
 # Internal crates.
-otf-pdf-syntax = { version = "0.1.0", path = "crates/otf-pdf-syntax" }
-otf-pdf-doc = { version = "0.1.0", path = "crates/otf-pdf-doc" }
-otf-pdf-content = { version = "0.1.0", path = "crates/otf-pdf-content" }
-otf-pdf-font = { version = "0.1.0", path = "crates/otf-pdf-font" }
-otf-pdf-text = { version = "0.1.0", path = "crates/otf-pdf-text" }
-otf-pdf = { version = "0.1.0", path = "crates/otf-pdf" }
+otf-pdf-syntax = { version = "0.2.0", path = "crates/otf-pdf-syntax" }
+otf-pdf-doc = { version = "0.2.0", path = "crates/otf-pdf-doc" }
+otf-pdf-content = { version = "0.2.0", path = "crates/otf-pdf-content" }
+otf-pdf-font = { version = "0.2.0", path = "crates/otf-pdf-font" }
+otf-pdf-text = { version = "0.2.0", path = "crates/otf-pdf-text" }
+otf-pdf = { version = "0.2.0", path = "crates/otf-pdf" }
 
 # Fonts (Fontations). One `read-fonts` is shared with harfrust.
 skrifa = "0.49.0"
