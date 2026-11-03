@@ -8,8 +8,6 @@ versioning: [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
-## [0.1.0] - 2026-10-27
-
 ### Added
 - **otf-pdf-syntax:** `Error::IncrementalSaveRefused`, so a refused
   incremental save has its own variant instead of being told apart by its
@@ -40,6 +38,30 @@ versioning: [SemVer](https://semver.org/).
 - **otf-pdf:** `otf_pdf::sanitize`, the full sanitizer.
 - Decision D29: es-runtime builds `runtime:pdf` on the published facade
   in its own repository, amending D22.
+
+### Changed
+- **otf-pdf-doc:** Incremental-save refusals (damaged xref, no `startxref`,
+  RC4/AES-128 input, an encryption change) return
+  `Error::IncrementalSaveRefused` instead of `Syntax` or
+  `UnsupportedEncryption`.
+- **otf-pdf-doc:** `SanitizeOptions` and `SanitizeReport` gain fields, so
+  struct literals must name them or use `..` from a profile or `NONE`.
+  `SanitizeOptions::ALL` now also covers the new categories.
+- **otf-pdf-doc:** `Document::sanitize` refuses `hidden_layers` and
+  `invisible_text` with `Error::WrongType`; use `otf_pdf::sanitize`.
+- **otf-pdf-cli:** `sanitize` runs the full sanitizer, so `--profile
+  privacy|strict` and `--all` also cut hidden layers (and `--all` invisible
+  text).
+
+### Fixed
+- **otf-pdf-content:** A page content stream, Form XObject or annotation
+  appearance that exceeds a `Limits` bound fails the page with
+  `Error::Limit` instead of being skipped, so the page no longer reads as
+  empty.
+
+## [0.1.0] - 2026-10-27
+
+### Added
 - **otf-pdf-syntax:** Object model (`Object`, `Dict`, `Name`, `PdfString`, `Stream`, `ObjId`)
   with names and strings kept as bytes, and a deterministic serializer.
 - **otf-pdf-syntax:** `Source` and `Sink` traits for input and output; no I/O of its own.
@@ -86,23 +108,3 @@ versioning: [SemVer](https://semver.org/).
 - **otf-pdf:** The public API: reading, editing, saving, encryption, sanitizing and text
   extraction, re-exported from the `otf-pdf-*` crates; the `content` module
   for custom devices.
-
-### Changed
-- **otf-pdf-doc:** Incremental-save refusals (damaged xref, no `startxref`,
-  RC4/AES-128 input, an encryption change) return
-  `Error::IncrementalSaveRefused` instead of `Syntax` or
-  `UnsupportedEncryption`.
-- **otf-pdf-doc:** `SanitizeOptions` and `SanitizeReport` gain fields, so
-  struct literals must name them or use `..` from a profile or `NONE`.
-  `SanitizeOptions::ALL` now also covers the new categories.
-- **otf-pdf-doc:** `Document::sanitize` refuses `hidden_layers` and
-  `invisible_text` with `Error::WrongType`; use `otf_pdf::sanitize`.
-- **otf-pdf-cli:** `sanitize` runs the full sanitizer, so `--profile
-  privacy|strict` and `--all` also cut hidden layers (and `--all` invisible
-  text).
-
-### Fixed
-- **otf-pdf-content:** A page content stream, Form XObject or annotation
-  appearance that exceeds a `Limits` bound fails the page with
-  `Error::Limit` instead of being skipped, so the page no longer reads as
-  empty.
