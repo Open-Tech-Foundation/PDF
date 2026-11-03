@@ -105,19 +105,30 @@ impl PageText {
 }
 
 /// Extracts text from a document. Fonts are loaded once and shared across
-/// pages.
+/// pages, and across extractors given the same [`FontCache`].
 pub struct TextExtractor<'a> {
     doc: &'a Document,
     fonts: FontCache,
 }
 
 impl<'a> TextExtractor<'a> {
-    /// An extractor for `doc`.
+    /// An extractor for `doc` with a cache of its own.
     pub fn new(doc: &'a Document) -> Self {
-        Self {
-            doc,
-            fonts: FontCache::new(),
-        }
+        Self::with_fonts(doc, FontCache::new())
+    }
+
+    /// An extractor for `doc` that loads fonts through `fonts`, a cache
+    /// shared with other extractors for the same document (a clone of a
+    /// `FontCache` shares its contents). A host answering one page at a time
+    /// keeps the cache beside the document, so each call reuses the fonts
+    /// earlier calls loaded.
+    pub fn with_fonts(doc: &'a Document, fonts: FontCache) -> Self {
+        Self { doc, fonts }
+    }
+
+    /// The font cache, to share with later extractors for this document.
+    pub fn fonts(&self) -> &FontCache {
+        &self.fonts
     }
 
     /// The text of page `index` (0-based), with positions.

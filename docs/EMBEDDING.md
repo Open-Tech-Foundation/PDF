@@ -79,17 +79,29 @@ an error, for validators.
 
 - `InvalidPassword`: ask the user for a password.
 - `UnsupportedEncryption`: a certificate-encrypted file or unknown scheme.
-- `Limit(kind)`: the file exceeded a configured limit.
+- `Limit(kind)`: the file exceeded a configured limit. This includes a
+  page's content streams, Form XObjects and annotation appearances during
+  text extraction: the page fails rather than reading as empty.
+- `IncrementalSaveRefused(reason)`: an incremental save would be unsafe;
+  save in full instead.
 - `NoXref`, `NoRoot`, `Syntax`: the file is not a readable PDF.
 - `Source`: the host's `Source` failed; its message is passed through.
 
 ## Text extraction
 
 `TextExtractor::new(&doc)` caches loaded fonts across pages; create one per
-document and reuse it. Each `page(i)` runs that page's content (and its
-annotation appearances) through the interpreter, bounded by `Limits` like
-everything else. A server indexing documents should call `page(i)` per page
-so one bad page fails alone; `text()` already skips pages that error.
+document and reuse it. A host that answers one page per call, and so cannot
+keep an extractor (it borrows the document), keeps a `FontCache` beside its
+`Arc<Document>` instead and builds each extractor with
+`TextExtractor::with_fonts(&doc, fonts.clone())`: clones share one cache,
+so later calls reuse the fonts earlier ones loaded. Fonts are cached by
+object number, so a cache belongs to one document.
+
+Each `page(i)` runs that page's content (and its annotation appearances)
+through the interpreter, bounded by `Limits` like everything else; a limit
+hit anywhere in the page is `Error::Limit`, never a page that reads as
+empty. A server indexing documents should call `page(i)` per page so one bad
+page fails alone; `text()` skips pages that are damaged but stops at a limit.
 
 ## Saving
 
@@ -100,8 +112,8 @@ stream); `Document::save` returns the bytes. Edits (`select_pages`,
 `set_outlines`, or low-level `store_mut()`) go into a copy-on-write overlay,
 so the original bytes are never changed and `SaveMode::Incremental` can
 append just the edits, as signatures need. Incremental saves are refused
-with an error when they would be unsafe (DECISIONS.md D24); fall back to a
-full save.
+with `Error::IncrementalSaveRefused` when they would be unsafe (DECISIONS.md
+D24); fall back to a full save.
 
 Encryption needs randomness, which the library never takes from the OS: pass
 an `Entropy` implementation in `SaveOptions::entropy`, backed by the host's

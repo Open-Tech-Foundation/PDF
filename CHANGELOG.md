@@ -9,6 +9,13 @@ versioning: [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **otf-pdf-syntax:** `Error::IncrementalSaveRefused`, so a refused
+  incremental save has its own variant instead of being told apart by its
+  message.
+- **otf-pdf-font:** `FontCache` clones share one cache; `len` and `is_empty`.
+- **otf-pdf-text:** `TextExtractor::with_fonts` and `TextExtractor::fonts`,
+  so separate extraction calls on one document reuse loaded fonts.
+- **otf-pdf:** `FontCache` re-exported at the top level.
 - Decision D29: es-runtime builds `runtime:pdf` on the published facade
   in its own repository, amending D22.
 - **otf-pdf-syntax:** Object model (`Object`, `Dict`, `Name`, `PdfString`, `Stream`, `ObjId`)
@@ -57,3 +64,15 @@ versioning: [SemVer](https://semver.org/).
 - **otf-pdf:** The public API: reading, editing, saving, encryption, sanitizing and text
   extraction, re-exported from the `otf-pdf-*` crates; the `content` module
   for custom devices.
+
+### Changed
+- **otf-pdf-doc:** Incremental-save refusals (damaged xref, no `startxref`,
+  RC4/AES-128 input, an encryption change) return
+  `Error::IncrementalSaveRefused` instead of `Syntax` or
+  `UnsupportedEncryption`.
+
+### Fixed
+- **otf-pdf-content:** A page content stream, Form XObject or annotation
+  appearance that exceeds a `Limits` bound fails the page with
+  `Error::Limit` instead of being skipped, so the page no longer reads as
+  empty.

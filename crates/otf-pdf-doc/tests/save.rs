@@ -290,7 +290,15 @@ fn incremental_save_refusals() {
         "startxref-past-eof.pdf",
     ] {
         let doc = open_file("malformed", damaged, "");
-        assert!(doc.save(&incremental).is_err(), "{damaged}");
+        assert!(
+            matches!(
+                doc.save(&incremental),
+                Err(Error::IncrementalSaveRefused(_))
+            ),
+            "{damaged}"
+        );
+        // A full save of the same file still works.
+        assert!(doc.save(&SaveOptions::default()).is_ok(), "{damaged}");
     }
     // Legacy encryption is never written.
     let mut rc4 = open_file("encrypted", "r4-rc4-128.pdf", "user");
@@ -298,7 +306,7 @@ fn incremental_save_refusals() {
         .set(ObjId::new(99, 0), Object::Name(Name::from("X")));
     assert!(matches!(
         rc4.save(&incremental),
-        Err(Error::UnsupportedEncryption(_))
+        Err(Error::IncrementalSaveRefused(_))
     ));
     // Encryption cannot change incrementally.
     let doc = open_file("malformed", "minimal-valid.pdf", "");
@@ -311,7 +319,9 @@ fn incremental_save_refusals() {
         }),
         ..incremental
     };
-    assert!(doc.save(&with_encryption).is_err());
+    let refused = doc.save(&with_encryption).unwrap_err();
+    assert!(matches!(refused, Error::IncrementalSaveRefused(_)));
+    assert!(refused.to_string().ends_with("save in full"));
 }
 
 #[test]

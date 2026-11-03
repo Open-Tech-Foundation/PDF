@@ -491,15 +491,31 @@ pub fn load_font(store: &Store, dict: &Dict) -> Arc<dyn Font> {
 
 /// A [`FontLoader`] that caches fonts by object id, so a font used on many
 /// pages is loaded once.
-#[derive(Debug, Default)]
+///
+/// Cloning is cheap and shares the cache: a host that holds a document
+/// keeps one `FontCache` beside it and hands a clone to each extractor, so
+/// separate calls reuse the fonts already loaded. Fonts are keyed by object
+/// number, so a cache belongs to one document; start a new one for another
+/// document, or after editing a font object in place.
+#[derive(Debug, Default, Clone)]
 pub struct FontCache {
-    fonts: Mutex<HashMap<ObjId, Arc<dyn Font>>>,
+    fonts: Arc<Mutex<HashMap<ObjId, Arc<dyn Font>>>>,
 }
 
 impl FontCache {
     /// An empty cache.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// How many fonts are cached.
+    pub fn len(&self) -> usize {
+        self.fonts.lock().map_or(0, |m| m.len())
+    }
+
+    /// Whether no font is cached yet.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 }
 
@@ -538,5 +554,34 @@ mod tests {
             None
         );
         assert_eq!(collection_unicode(&[], 5), None);
+    }
+
+    #[test]
+    fn clones_share_one_cache() {
+        let bytes = b"%PDF-1.7\n1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n\
+            2 0 obj << /Type /Pages /Kids [] /Count 0 >> endobj\n\
+            3 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj\n"
+            .to_vec();
+        let doc = otf_pdf_doc::Document::open(bytes, Default::default()).unwrap();
+        let font = Object::Ref(ObjId::new(3, 0));
+        let cache = FontCache::new();
+        assert!(cache.is_empty());
+        let first = cache.load(doc.store(), &font).unwrap();
+        let shared = cache.clone();
+        assert_eq!(shared.len(), 1);
+        // The clone serves the font the original loaded, not a new load.
+        let again = shared.load(doc.store(), &font).unwrap();
+        assert!(Arc::ptr_eq(&first, &again));
+        // A fresh cache shares nothing.
+        let fresh = FontCache::new();
+        assert!(fresh.is_empty());
+        assert!(!Arc::ptr_eq(
+            &first,
+            &fresh.load(doc.store(), &font).unwrap()
+        ));
+        // Direct (unreferenced) fonts have no id to cache under.
+        let direct = Object::Dict(doc.store().resolve_dict(&font).unwrap());
+        assert!(shared.load(doc.store(), &direct).is_some());
+        assert_eq!(cache.len(), 1);
     }
 }

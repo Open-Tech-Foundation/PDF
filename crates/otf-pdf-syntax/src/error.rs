@@ -42,6 +42,9 @@ pub enum Error {
     UnsupportedEncryption(String),
     /// Neither the user nor the owner password matched.
     InvalidPassword,
+    /// An incremental save was refused because appending would be unsafe
+    /// or impossible; the string says why. A full save still works.
+    IncrementalSaveRefused(&'static str),
 }
 
 impl Error {
@@ -69,6 +72,9 @@ impl fmt::Display for Error {
             Self::Filter(msg) => write!(f, "stream decoding failed: {msg}"),
             Self::UnsupportedEncryption(msg) => write!(f, "unsupported encryption: {msg}"),
             Self::InvalidPassword => f.write_str("incorrect password"),
+            Self::IncrementalSaveRefused(reason) => {
+                write!(f, "incremental save refused: {reason}; save in full")
+            }
         }
     }
 }
@@ -108,6 +114,10 @@ mod tests {
         assert_eq!(
             Error::MissingObject(ObjId::new(3, 0)).to_string(),
             "object 3 0 not found"
+        );
+        assert_eq!(
+            Error::IncrementalSaveRefused("no startxref to append to").to_string(),
+            "incremental save refused: no startxref to append to; save in full"
         );
         assert!(std::error::Error::source(&Error::Source(SourceError::new("x"))).is_some());
         assert!(std::error::Error::source(&Error::NoRoot).is_none());

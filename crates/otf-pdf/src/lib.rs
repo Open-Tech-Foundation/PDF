@@ -30,6 +30,7 @@ pub use otf_pdf_doc::{
     SanitizeOptions, SanitizeReport, SaveMode, SaveOptions, Store, decode_text_string,
     encode_text_string,
 };
+pub use otf_pdf_font::FontCache;
 pub use otf_pdf_text::{PageText, TextChar, TextExtractor, TextLine, Word};
 /// Content-stream interpretation: run a page through your own
 /// [`Device`](content::Device).
@@ -71,6 +72,7 @@ mod tests {
         shareable::<SaveOptions>();
         shareable::<Store>();
         shareable::<PageText>();
+        shareable::<FontCache>();
     }
 
     #[test]

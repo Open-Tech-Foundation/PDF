@@ -350,8 +350,8 @@ impl Document {
         let store = &self.store;
         let file = store.file();
         if options.encryption.is_some() {
-            return Err(Error::UnsupportedEncryption(
-                "encryption cannot change in an incremental save; save in full".into(),
+            return Err(Error::IncrementalSaveRefused(
+                "encryption cannot change in an incremental save",
             ));
         }
         // Appending to a damaged revision chain makes it worse for every
@@ -374,20 +374,19 @@ impl Document {
             )
         });
         if damaged {
-            return Err(Error::syntax(
-                0,
-                "the file's cross-reference data needed repair, so there is no sound revision to append to; save in full",
+            return Err(Error::IncrementalSaveRefused(
+                "the file's cross-reference data needed repair, so there is no sound revision to append to",
             ));
         }
         let prev = file
             .startxref()?
-            .ok_or_else(|| Error::syntax(0, "no startxref to append to; save in full"))?;
+            .ok_or(Error::IncrementalSaveRefused("no startxref to append to"))?;
         let security = file.security();
         if let Some(sec) = security
             && !sec.can_encrypt()
         {
-            return Err(Error::UnsupportedEncryption(
-                "the file uses RC4 or AES-128, which is never written; save in full".into(),
+            return Err(Error::IncrementalSaveRefused(
+                "the file uses RC4 or AES-128, which is never written",
             ));
         }
         let encrypt_ref = store.trailer().get_ref(b"Encrypt");

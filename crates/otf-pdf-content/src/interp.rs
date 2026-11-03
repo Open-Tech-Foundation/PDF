@@ -35,23 +35,56 @@ pub fn run_page(
 }
 
 /// The page's content: its content streams decoded and joined.
+///
+/// A broken part loses its own content, not the page's, but a part over a
+/// [`Limits`](otf_pdf_syntax::Limits) bound fails the page with
+/// [`Error::Limit`]: a page that silently read as empty would hide the cut.
 pub fn page_content(store: &Store, page: &Page) -> Result<Vec<u8>> {
-    let contents = store.resolve(page.dict.get(b"Contents").unwrap_or(&Object::Null));
+    let contents = resolve(store, page.dict.get(b"Contents").unwrap_or(&Object::Null))?;
     let parts: Vec<Object> = match contents {
-        Object::Array(items) => items.iter().map(|i| store.resolve(i)).collect(),
+        Object::Array(items) => items
+            .iter()
+            .map(|i| resolve(store, i))
+            .collect::<Result<_>>()?,
         other => vec![other],
     };
     let mut out = Vec::new();
     for part in parts {
-        if let Object::Stream(s) = part {
-            // A broken part loses its own content, not the page's.
-            if let Ok(decoded) = store.decode_stream(&s) {
-                out.extend_from_slice(&decoded.data);
-                out.push(b'\n');
-            }
+        if let Object::Stream(s) = part
+            && let Some(decoded) = unless_limit(store.decode_stream(&s))?
+        {
+            out.extend_from_slice(&decoded.data);
+            out.push(b'\n');
         }
     }
     Ok(out)
+}
+
+/// `Ok(Some)` on success, `Ok(None)` for a damaged input the caller skips,
+/// and the error itself when it is a limit: limits stop the work they bound
+/// instead of reading as missing content.
+fn unless_limit<T>(result: Result<T>) -> Result<Option<T>> {
+    match result {
+        Ok(v) => Ok(Some(v)),
+        Err(e @ Error::Limit(_)) => Err(e),
+        Err(_) => Ok(None),
+    }
+}
+
+/// Like [`Store::resolve`], but a limit hit while loading an object is an
+/// error rather than `null`.
+fn resolve(store: &Store, object: &Object) -> Result<Object> {
+    let mut current = object.clone();
+    for _ in 0..store.limits().max_depth {
+        match current {
+            Object::Ref(id) => match unless_limit(store.get(id))? {
+                Some(o) => current = (*o).clone(),
+                None => return Ok(Object::Null),
+            },
+            other => return Ok(other),
+        }
+    }
+    Ok(Object::Null)
 }
 
 struct Interpreter<'a> {
@@ -398,7 +431,7 @@ impl Interpreter<'_> {
             return Ok(());
         };
         let id = reference.as_ref();
-        let Object::Stream(stream) = self.store.resolve(&reference) else {
+        let Object::Stream(stream) = resolve(self.store, &reference)? else {
             return Ok(());
         };
         match stream.dict.get_name(b"Subtype") {
@@ -418,7 +451,7 @@ impl Interpreter<'_> {
                 if self.forms.len() as u32 >= self.store.limits().max_depth.min(64) {
                     return Err(Error::Limit(LimitKind::Depth));
                 }
-                let Ok(decoded) = self.store.decode_stream(&stream) else {
+                let Some(decoded) = unless_limit(self.store.decode_stream(&stream))? else {
                     return Ok(());
                 };
                 let form_resources = stream
@@ -487,7 +520,7 @@ impl Interpreter<'_> {
                 _ => continue,
             };
             let id = appearance.as_ref();
-            let Object::Stream(stream) = self.store.resolve(&appearance) else {
+            let Object::Stream(stream) = resolve(self.store, &appearance)? else {
                 continue;
             };
             let Some(rect) = dict
@@ -542,7 +575,7 @@ impl Interpreter<'_> {
                 ctm: fit,
                 ..GraphicsState::default()
             };
-            let Ok(decoded) = self.store.decode_stream(&stream) else {
+            let Some(decoded) = unless_limit(self.store.decode_stream(&stream))? else {
                 continue;
             };
             let form_resources = stream
@@ -586,5 +619,134 @@ fn current_point(path: &[PathSegment]) -> (f64, f64) {
         Some(PathSegment::MoveTo(x, y) | PathSegment::LineTo(x, y)) => (*x, *y),
         Some(PathSegment::CurveTo(_, _, _, _, x, y)) => (*x, *y),
         _ => (0.0, 0.0),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::device::Font;
+    use otf_pdf_doc::Document;
+    use otf_pdf_syntax::{Limits, OpenOptions};
+
+    /// Draws a stroked line: 15 bytes of content, 30 hex-encoded.
+    const LINE: &str = "0 0 m 10 10 l S";
+
+    fn hex(s: &str) -> String {
+        let mut out: String = s.bytes().map(|b| format!("{b:02X}")).collect();
+        out.push('>');
+        out
+    }
+
+    fn stream(n: u32, extra: &str, body: &str, hex_encoded: bool) -> String {
+        let (filter, data) = if hex_encoded {
+            ("/Filter /ASCIIHexDecode", hex(body))
+        } else {
+            ("", body.to_owned())
+        };
+        format!(
+            "{n} 0 obj << {extra} {filter} /Length {} >> stream\n{data}\nendstream endobj\n",
+            data.len()
+        )
+    }
+
+    /// A one-page file: page content in object 4, a Form XObject `/X0`
+    /// (object 5) and an annotation (object 6) whose appearance is
+    /// object 7. Content streams the test passes as `Some` are
+    /// ASCIIHex-encoded so they count against the decoded-size limit.
+    fn pdf(page: &str, page_hex: bool, form: &str, appearance: &str) -> Vec<u8> {
+        let form_dict = "/Type /XObject /Subtype /Form /BBox [0 0 100 100]";
+        let mut out = String::from(
+            "%PDF-1.7\n1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n\
+             2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n\
+             3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] \
+             /Contents 4 0 R /Resources << /XObject << /X0 5 0 R >> >> \
+             /Annots [6 0 R] >> endobj\n",
+        );
+        out.push_str(&stream(4, "", page, page_hex));
+        out.push_str(&stream(5, form_dict, form, true));
+        out.push_str(
+            "6 0 obj << /Type /Annot /Subtype /Square /Rect [0 0 100 100] \
+             /AP << /N 7 0 R >> >> endobj\n",
+        );
+        out.push_str(&stream(7, form_dict, appearance, true));
+        out.into_bytes()
+    }
+
+    #[derive(Default)]
+    struct Strokes(usize);
+
+    impl Device for Strokes {
+        fn stroke_path(&mut self, _: &[PathSegment], _: &GraphicsState) {
+            self.0 += 1;
+        }
+    }
+
+    struct NoFonts;
+
+    impl FontLoader for NoFonts {
+        fn load(&self, _: &Store, _: &Object) -> Option<Arc<dyn Font>> {
+            None
+        }
+    }
+
+    fn strokes(bytes: Vec<u8>, max_decoded_size: u64) -> Result<usize> {
+        let options = OpenOptions {
+            limits: Limits {
+                max_decoded_size,
+                ..Limits::default()
+            },
+            ..OpenOptions::default()
+        };
+        let doc = Document::open(bytes, options)?;
+        let pages = doc.pages()?;
+        let page = pages.first().ok_or(Error::NoRoot)?;
+        let mut device = Strokes::default();
+        run_page(doc.store(), page, &NoFonts, &mut device)?;
+        Ok(device.0)
+    }
+
+    #[test]
+    fn page_form_and_appearance_all_draw_within_limits() {
+        let page = format!("{LINE} /X0 Do");
+        assert_eq!(strokes(pdf(&page, true, LINE, LINE), 1 << 20), Ok(3));
+    }
+
+    #[test]
+    fn page_content_over_the_limit_is_an_error_not_an_empty_page() {
+        let page = format!("{LINE} /X0 Do");
+        assert_eq!(
+            strokes(pdf(&page, true, "", ""), 8),
+            Err(Error::Limit(LimitKind::DecodedSize))
+        );
+    }
+
+    #[test]
+    fn form_xobject_over_the_limit_fails_the_page() {
+        // The page content is unfiltered, so only the form is decoded.
+        assert_eq!(
+            strokes(pdf("/X0 Do", false, LINE, ""), 8),
+            Err(Error::Limit(LimitKind::DecodedSize))
+        );
+    }
+
+    #[test]
+    fn appearance_over_the_limit_fails_the_page() {
+        assert_eq!(
+            strokes(pdf(LINE, false, "", LINE), 8),
+            Err(Error::Limit(LimitKind::DecodedSize))
+        );
+    }
+
+    #[test]
+    fn damaged_streams_still_lose_only_their_own_content() {
+        // A bad hex digit is a filter error, not a limit: that stream is
+        // skipped and the rest of the page still draws.
+        let mut bytes = pdf(&format!("{LINE} /X0 Do"), false, LINE, LINE);
+        // The last "l " is in the appearance stream (object 7).
+        let at = bytes.windows(4).rposition(|w| w == b"6C20").unwrap();
+        assert!(at > bytes.windows(7).rposition(|w| w == b"7 0 obj").unwrap());
+        bytes[at] = b'!';
+        assert_eq!(strokes(bytes, 1 << 20), Ok(2));
     }
 }

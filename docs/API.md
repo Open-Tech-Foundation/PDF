@@ -55,7 +55,13 @@ for line in &page.lines {                   // TextLine { text, bbox, chars }
 Coordinates are in the displayed page (crop box origin, `/Rotate` applied,
 y up, points). Reading order follows the content stream, like
 `pdftotext -raw`. Annotation appearances (filled form fields) are included;
-clipped and hidden text is not.
+clipped and hidden text is not. A page whose content exceeds a `Limits` bound
+fails with `Error::Limit` instead of reading as empty.
+
+To reuse fonts across separate calls (one page per request), keep a
+`FontCache` beside the document and pass clones of it:
+`TextExtractor::with_fonts(&doc, fonts.clone())`. A cache belongs to one
+document.
 
 ## Edit
 
@@ -94,7 +100,7 @@ doc.save_to(&mut my_sink, &options)?;                        // impl Sink
 
 | Option | Default | |
 | --- | --- | --- |
-| `mode` | `Full` | `Incremental` appends; refused on damaged xrefs and legacy encryption |
+| `mode` | `Full` | `Incremental` appends; refused with `Error::IncrementalSaveRefused` on damaged xrefs, legacy encryption or an encryption change |
 | `version` | 1.7 | or 2.0 |
 | `object_streams` | `true` | `false` writes a classic xref table |
 | `compress` | `true` | Flate for unfiltered streams |
