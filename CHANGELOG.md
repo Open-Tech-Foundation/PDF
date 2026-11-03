@@ -8,6 +8,8 @@ versioning: [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-03
+
 ### Added
 - **otf-pdf-syntax:** `Error::IncrementalSaveRefused`, so a refused
   incremental save has its own variant instead of being told apart by its

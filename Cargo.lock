@@ -234,7 +234,7 @@ checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 
 [[package]]
 name = "otf-pdf"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "otf-pdf-content",
  "otf-pdf-doc",
@@ -245,14 +245,14 @@ dependencies = [
 
 [[package]]
 name = "otf-pdf-cli"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "otf-pdf",
 ]
 
 [[package]]
 name = "otf-pdf-content"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "otf-pdf-doc",
  "otf-pdf-syntax",
@@ -260,7 +260,7 @@ dependencies = [
 
 [[package]]
 name = "otf-pdf-doc"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "flate2",
  "md-5",
@@ -269,7 +269,7 @@ dependencies = [
 
 [[package]]
 name = "otf-pdf-font"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "otf-pdf-content",
  "otf-pdf-doc",
@@ -279,7 +279,7 @@ dependencies = [
 
 [[package]]
 name = "otf-pdf-syntax"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "aes",
  "cbc",
@@ -291,7 +291,7 @@ dependencies = [
 
 [[package]]
 name = "otf-pdf-text"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "otf-pdf-content",
  "otf-pdf-doc",
