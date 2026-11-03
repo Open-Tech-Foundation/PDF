@@ -42,7 +42,7 @@ Commands:
   extract <in> <out> <pages>  Keep only <pages>, e.g. 1-3,5,8-
   delete <in> <out> <pages>   Remove <pages>
   sanitize <in> <out>         Remove scripts, risky actions, attachments, XFA
-                              and multimedia (--all: links and metadata too)
+                              and multimedia (or a --profile's categories)
   rotate <in> <out> <pages> <degrees>
                               Rotate <pages> clockwise by a multiple of 90
   help                        Print this help
@@ -51,6 +51,10 @@ Options:
   --password <pw>             Password for an encrypted file
   --strict                    Fail instead of repairing malformed input
   --data                      dump: write a stream's decoded data, raw
+  --profile <name>            sanitize: basic (also metadata, comments, hidden
+                              annotations), privacy (also thumbnails, Web
+                              Capture data) or strict (also links, navigation,
+                              tagging)
   --all                       sanitize: remove every category
   --incremental               Append changes instead of rewriting
   --classic-xref              Write a classic xref table, no object streams
@@ -74,6 +78,7 @@ struct Options {
     strict: bool,
     data: bool,
     all: bool,
+    profile: Option<SanitizeOptions>,
     incremental: bool,
     classic_xref: bool,
     pdf_version: Option<Version>,
@@ -97,6 +102,15 @@ fn parse_options(args: &[OsString]) -> Result<Options, String> {
             Some("--strict") => options.strict = true,
             Some("--data") => options.data = true,
             Some("--all") => options.all = true,
+            Some("--profile") => {
+                let name = iter.next().ok_or("--profile needs a value")?;
+                options.profile = Some(match name.to_str() {
+                    Some("basic") => SanitizeOptions::BASIC,
+                    Some("privacy") => SanitizeOptions::PRIVACY,
+                    Some("strict") => SanitizeOptions::STRICT,
+                    _ => return Err("--profile must be basic, privacy or strict".into()),
+                });
+            }
             Some("--incremental") => options.incremental = true,
             Some("--classic-xref") => options.classic_xref = true,
             Some("--pdf-version") => {
@@ -118,6 +132,9 @@ fn parse_options(args: &[OsString]) -> Result<Options, String> {
             Some(s) if s.starts_with("--") => return Err(format!("unknown option '{s}'")),
             _ => options.positional.push(arg.clone()),
         }
+    }
+    if options.all && options.profile.is_some() {
+        return Err("use --all or --profile, not both".into());
     }
     Ok(options)
 }
@@ -337,10 +354,10 @@ fn edit_and_save(doc: &mut Document, command: &str, options: &Options) -> Result
     let count = doc.page_count().map_err(|e| e.to_string())?;
     match command {
         "sanitize" => {
-            let sanitize = if options.all {
-                SanitizeOptions::ALL
-            } else {
-                SanitizeOptions::default()
+            let sanitize = match (options.all, options.profile) {
+                (true, _) => SanitizeOptions::ALL,
+                (false, Some(profile)) => profile,
+                (false, None) => SanitizeOptions::default(),
             };
             let report = doc.sanitize(&sanitize).map_err(|e| e.to_string())?;
             // Only a full save drops what was removed (DECISIONS D26).

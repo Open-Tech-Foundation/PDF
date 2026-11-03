@@ -16,6 +16,12 @@ versioning: [SemVer](https://semver.org/).
 - **otf-pdf-text:** `TextExtractor::with_fonts` and `TextExtractor::fonts`,
   so separate extraction calls on one document reuse loaded fonts.
 - **otf-pdf:** `FontCache` re-exported at the top level.
+- **otf-pdf-doc:** Sanitize categories `comments`, `hidden_annotations`,
+  `thumbnails`, `navigation`, `web_capture` and `structure`, each counted in
+  `SanitizeReport`; `metadata` also removes `/LastModified`.
+- **otf-pdf-doc:** Sanitize profiles `SanitizeOptions::BASIC`, `PRIVACY` and
+  `STRICT`, and `NONE` to build single categories from (D30).
+- **otf-pdf-cli:** `sanitize --profile basic|privacy|strict`.
 - Decision D29: es-runtime builds `runtime:pdf` on the published facade
   in its own repository, amending D22.
 - **otf-pdf-syntax:** Object model (`Object`, `Dict`, `Name`, `PdfString`, `Stream`, `ObjId`)
@@ -70,6 +76,9 @@ versioning: [SemVer](https://semver.org/).
   RC4/AES-128 input, an encryption change) return
   `Error::IncrementalSaveRefused` instead of `Syntax` or
   `UnsupportedEncryption`.
+- **otf-pdf-doc:** `SanitizeOptions` and `SanitizeReport` gain fields, so
+  struct literals must name them or use `..` from a profile or `NONE`.
+  `SanitizeOptions::ALL` now also covers the new categories.
 
 ### Fixed
 - **otf-pdf-content:** A page content stream, Form XObject or annotation

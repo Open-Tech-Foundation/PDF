@@ -137,3 +137,13 @@ The standard 14 metrics, Adobe Glyph List, predefined encodings and font name al
 
 ## D29: es-runtime ships `runtime:pdf`
 Amends D22. This repository still ships only the library and adds no host bindings; es-runtime builds `runtime:pdf` on the published facade itself (es-runtime DECISIONS D190), as it builds `runtime:images` on otf-pixels. D22's "no `runtime:pdf` module, here or in es-runtime" is withdrawn for es-runtime: the bindings live in that repository, and the API they expose is decided there. What this repository owes them is unchanged: the embedding contract in docs/EMBEDDING.md.
+
+## D30: Sanitize profiles
+Amends D26. `SanitizeOptions` stays one switch per category, and adds `comments` (markup annotations and popups; `/Redact` marks are kept, since removing one would look like the redaction was done), `hidden_annotations` (Hidden or NoView, except form widgets and popups), `thumbnails`, `navigation` (outline, named destinations, threads and beads, page labels), `web_capture` (`/SpiderInfo`, the `/IDS` and `/URLS` trees, pages' content-set `/ID`) and `structure` (the structure tree, `/MarkInfo`, `/StructParent(s)`); `metadata` also covers `/LastModified`. Three profiles are named values of those switches, each removing everything the one before it does:
+- `BASIC`, for ordinary sharing: everything that can run or carry files, plus metadata, comments and hidden annotations. Links, form widgets, navigation and tagging stay.
+- `PRIVACY`, for confidential documents: `BASIC` plus thumbnails and Web Capture data. Earlier revisions are dropped by the full save sanitizing already requires (D26). Invisible text (OCR layers) is kept, so scans stay searchable.
+- `STRICT`, for sensitive or untrusted documents: every category, including links, navigation and the structure tree. Form widgets and invisible text are still kept.
+
+A profile promises its purpose, not a fixed list: a release that adds a category serving a profile turns it on there, as a new feature listed in the changelog rather than a breaking change. Callers who need a fixed set spell out the fields, from `SanitizeOptions::NONE`. `Default` is unchanged from D26, and `ALL` is every category (today the same as `STRICT`). The CLI takes `sanitize --profile basic|privacy|strict`.
+
+Not covered yet, by design order: optional-content (hidden layer) removal, invisible and hidden text removal and content normalization need a content-stream writer; an `inspect` report needs the same visits without the removal; the trailer `/ID` is already replaced by every full save (D24); rasterizing needs the renderer (Phase 8); form field values need the forms layer (Phase 4).

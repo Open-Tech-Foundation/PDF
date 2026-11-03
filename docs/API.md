@@ -76,7 +76,7 @@ All edits go into a copy-on-write overlay; the original bytes are untouched.
 | `set_outlines(&[OutlineItem])` | Replace the bookmark tree |
 | `set_info(&Info)` | Write Info and a matching XMP packet |
 | `add_attachment(name, data, &AttachmentOptions)`, `remove_attachment(name)` | Embedded files |
-| `sanitize(&SanitizeOptions)` → `SanitizeReport` | Remove scripts, risky actions, attachments, XFA, multimedia (and optionally links, metadata); save in full afterwards |
+| `sanitize(&SanitizeOptions)` → `SanitizeReport` | Remove scripts, risky actions, attachments, XFA, multimedia, and per option comments, hidden annotations, metadata, thumbnails, links, navigation, Web Capture data and tagging; profiles `BASIC`, `PRIVACY`, `STRICT`; save in full afterwards |
 | `store_mut()` → `Store` | Low level: `get`, `set`, `add`, `delete`, `set_trailer_entry` |
 
 ## Save

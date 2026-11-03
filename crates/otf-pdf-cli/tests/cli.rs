@@ -413,6 +413,46 @@ fn sanitize_command() {
 }
 
 #[test]
+fn sanitize_profiles() {
+    let out = tmp("profiled.pdf");
+    for profile in ["basic", "privacy", "strict"] {
+        let output = bin()
+            .args(["sanitize", "--profile", profile])
+            .arg(malformed("minimal-valid.pdf"))
+            .arg(&out)
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{profile}: {}", stderr(&output));
+        assert!(
+            stderr(&output).contains("comments: "),
+            "{}",
+            stderr(&output)
+        );
+        assert_eq!(page_count(&out, ""), "1");
+    }
+    let run = |args: &[&str]| {
+        bin()
+            .arg("sanitize")
+            .args(args)
+            .arg(malformed("minimal-valid.pdf"))
+            .arg(&out)
+            .output()
+            .unwrap()
+    };
+    // An unknown profile, a missing value and --all with a profile are
+    // usage errors.
+    for args in [
+        &["--profile", "paranoid"][..],
+        &["--profile"],
+        &["--all", "--profile", "basic"],
+    ] {
+        let output = run(args);
+        assert_eq!(output.status.code(), Some(2), "{args:?}");
+        assert!(!stderr(&output).is_empty(), "{args:?}");
+    }
+}
+
+#[test]
 fn text_command() {
     let output = bin()
         .arg("text")
