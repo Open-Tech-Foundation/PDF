@@ -37,7 +37,8 @@ pub use otf_pdf_text::{PageText, TextChar, TextExtractor, TextLine, Word};
 pub mod content {
     pub use otf_pdf_content::{
         Device, FillRule, Font, FontLoader, Glyph, GraphicsState, Image, Matrix, Operation,
-        PathSegment, TextState, page_content, parse_content, run_page,
+        PathSegment, TextState, page_content, parse_content, run_page, write_content,
+        write_operation,
     };
     pub use otf_pdf_font::FontCache;
 }

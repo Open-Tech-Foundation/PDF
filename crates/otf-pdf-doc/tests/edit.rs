@@ -394,3 +394,30 @@ fn full_save_writes_identical_streams_once() {
     // Pages 10, 11, 12 plus one shared copy of page 10's content.
     assert_eq!(contents.len(), 3);
 }
+
+#[test]
+fn page_content_is_replaced() {
+    let mut doc = open(three_pages());
+    let old = doc.pages().unwrap()[1].dict.get_ref(b"Contents").unwrap();
+    doc.set_page_content(1, b"BT (Replaced) Tj ET\n".to_vec())
+        .unwrap();
+    // Visible before saving, through the overlay.
+    assert_eq!(texts(&doc)[1], "BT (Replaced) Tj ET\n");
+    let again = reopen(&doc);
+    let t = texts(&again);
+    assert_eq!(t[0], "BT (Page 10) ET");
+    assert_eq!(t[1], "BT (Replaced) Tj ET\n");
+    assert_eq!(t[2], "BT (Page 12) ET");
+    // Inherited attributes and resources stay.
+    let page = &again.pages().unwrap()[1];
+    assert_eq!(page.rotate, 90);
+    assert!(page.resources.as_ref().unwrap().get(b"Font").is_some());
+    // The old stream is no longer written.
+    let saved = doc.save(&SaveOptions::default()).unwrap();
+    assert!(!saved.windows(7).any(|w| w == b"Page 11"));
+    assert!(doc.store().get(old).is_ok(), "the base is not modified");
+    // An empty page content is allowed; a page past the end is not.
+    doc.set_page_content(0, Vec::new()).unwrap();
+    assert_eq!(texts(&reopen(&doc))[0], "");
+    assert!(doc.set_page_content(3, Vec::new()).is_err());
+}

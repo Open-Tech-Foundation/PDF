@@ -101,9 +101,23 @@ fn inline_image(bytes: &[u8], limits: &Limits) -> (Dict, Vec<u8>, usize) {
     // One whitespace byte separates `ID` from the data.
     let start = (parser.lexer().pos() + 1).min(bytes.len());
     let data = bytes.get(start..).unwrap_or_default();
-    // `EI` delimited by whitespace and followed by text that looks like
-    // operators (binary data can contain "EI" by chance).
-    let end = (0..data.len().saturating_sub(1))
+    let end = image_end(data);
+    let mut image = data.get(..end).unwrap_or_default().to_vec();
+    // Drop the whitespace before `EI`.
+    if image
+        .last()
+        .is_some_and(|&b| otf_pdf_syntax::lexer::is_whitespace(b))
+    {
+        image.pop();
+    }
+    (dict, image, (start + end + 2).min(bytes.len()))
+}
+
+/// Where the `EI` ending inline-image `data` starts: the first `EI`
+/// delimited by whitespace and followed by text that looks like operators
+/// (binary data can contain "EI" by chance), or the end of `data`.
+pub(crate) fn image_end(data: &[u8]) -> usize {
+    (0..data.len().saturating_sub(1))
         .find(|&i| {
             data.get(i..i + 2) == Some(b"EI")
                 && (i == 0
@@ -119,16 +133,7 @@ fn inline_image(bytes: &[u8], limits: &Limits) -> (Dict, Vec<u8>, usize) {
                     .iter()
                     .all(|&b| b == b'\n' || b == b'\r' || b == b'\t' || (0x20..0x7f).contains(&b))
         })
-        .unwrap_or(data.len());
-    let mut image = data.get(..end).unwrap_or_default().to_vec();
-    // Drop the whitespace before `EI`.
-    if image
-        .last()
-        .is_some_and(|&b| otf_pdf_syntax::lexer::is_whitespace(b))
-    {
-        image.pop();
-    }
-    (dict, image, (start + end + 2).min(bytes.len()))
+        .unwrap_or(data.len())
 }
 
 /// The name operand at `i`, if it is one.

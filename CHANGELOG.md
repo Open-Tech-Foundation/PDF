@@ -22,6 +22,12 @@ versioning: [SemVer](https://semver.org/).
 - **otf-pdf-doc:** Sanitize profiles `SanitizeOptions::BASIC`, `PRIVACY` and
   `STRICT`, and `NONE` to build single categories from (D30).
 - **otf-pdf-cli:** `sanitize --profile basic|privacy|strict`.
+- **otf-pdf-content:** Content-stream writer `write_content` and
+  `write_operation`, the inverse of `parse_content`; it refuses operations
+  that would not read back as themselves and hex-encodes inline images whose
+  data could be mistaken for `EI` (D31).
+- **otf-pdf-doc:** `Document::set_page_content` replaces a page's content.
+- **otf-pdf:** `content::write_content` and `content::write_operation`.
 - Decision D29: es-runtime builds `runtime:pdf` on the published facade
   in its own repository, amending D22.
 - **otf-pdf-syntax:** Object model (`Object`, `Dict`, `Name`, `PdfString`, `Stream`, `ObjId`)

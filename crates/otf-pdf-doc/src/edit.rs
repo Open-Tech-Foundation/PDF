@@ -206,6 +206,25 @@ impl Document {
         })
     }
 
+    /// Replaces a page's content with `content`, decoded content-stream
+    /// bytes (as `otf_pdf_content::write_content` produces). The page gets
+    /// one new stream in place of its `/Contents`; the old streams become
+    /// unreachable and a full save drops them. The stream is stored
+    /// unfiltered, and a full save compresses it. The page's resources are
+    /// unchanged, so the new content may only name resources it has.
+    pub fn set_page_content(&mut self, index: usize, content: Vec<u8>) -> Result<()> {
+        if index >= self.page_count()? {
+            return Err(Error::syntax(0, "page index out of range"));
+        }
+        let stream = self.store_mut().add(Object::Stream(Stream {
+            dict: Dict::new(),
+            raw: Arc::from(content),
+        }))?;
+        self.edit_page(index, |d| {
+            d.insert("Contents", stream);
+        })
+    }
+
     /// Sets a page's crop box (the visible region).
     pub fn set_crop_box(&mut self, index: usize, rect: Rect) -> Result<()> {
         self.edit_page(index, |d| {

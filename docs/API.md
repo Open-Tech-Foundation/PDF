@@ -72,6 +72,7 @@ All edits go into a copy-on-write overlay; the original bytes are untouched.
 | `select_pages(&[usize])` | Keep these pages in this order (duplicates allowed) |
 | `reorder_pages(&perm)`, `delete_pages(&[usize])` | Reorder; delete with outline and named-destination cleanup |
 | `rotate_page(i, degrees)`, `set_crop_box(i, rect)`, `set_media_box(i, rect)` | Page geometry |
+| `set_page_content(i, bytes)` | Replace a page's content stream (e.g. with `content::write_content` output) |
 | `append_pages_from(&other, Some(&[..]))`, `extract_pages(&[..])` | Merge from / split into documents (deep copy, shared objects once) |
 | `set_outlines(&[OutlineItem])` | Replace the bookmark tree |
 | `set_info(&Info)` | Write Info and a matching XMP packet |
@@ -112,5 +113,5 @@ doc.save_to(&mut my_sink, &options)?;                        // impl Sink
 
 | Module | For |
 | --- | --- |
-| `otf_pdf::content` | `run_page(store, page, &FontCache, &mut device)` with your own `Device` (glyphs, paths, images, marked content); `parse_content` for operators |
+| `otf_pdf::content` | `run_page(store, page, &FontCache, &mut device)` with your own `Device` (glyphs, paths, images, marked content); `parse_content` for operators, `write_content` to write edited ones back |
 | `File`, `Object`, `Dict`, `ObjId`, `XrefEntry`, `to_bytes` | Objects and the cross-reference table directly |

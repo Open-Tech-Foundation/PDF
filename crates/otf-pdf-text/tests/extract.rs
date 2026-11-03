@@ -93,3 +93,29 @@ fn font_cache_is_shared_across_extractors() {
     own.page_text(0).unwrap();
     assert_eq!(own.fonts().len(), 1);
 }
+
+#[test]
+fn rewritten_page_content_drops_text_end_to_end() {
+    use otf_pdf_content::{page_content, parse_content, write_content};
+    use otf_pdf_doc::SaveOptions;
+    use otf_pdf_syntax::{Object, PdfString};
+
+    let mut doc = open(1 << 20);
+    let page = doc.pages().unwrap()[0].clone();
+    let content = page_content(doc.store(), &page).unwrap();
+    let mut ops = parse_content(&content, doc.store().limits()).unwrap();
+    // Replace the shown string, as a redaction or sanitizer pass would.
+    for op in &mut ops {
+        if op.operator == b"Tj" {
+            op.operands = vec![Object::String(PdfString::literal("Bye"))];
+        }
+    }
+    doc.set_page_content(0, write_content(&ops).unwrap())
+        .unwrap();
+    let saved = doc.save(&SaveOptions::default()).unwrap();
+    let again = Document::open(saved, OpenOptions::default()).unwrap();
+    let ex = TextExtractor::new(&again);
+    assert_eq!(ex.page_text(0).unwrap(), "Bye\n");
+    // The other page, sharing the font, is untouched.
+    assert_eq!(ex.page_text(1).unwrap(), "Hello\n");
+}
